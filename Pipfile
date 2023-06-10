@@ -18,6 +18,7 @@ six = "*"
 tenacity = "*"
 apscheduler = "*"
 pycryptodome = "*"
+youtube-transcript-api = "*"
 
 [dev-packages]
 autopep8 = "*"
