@@ -2,6 +2,7 @@ from flask import Flask, abort, json, request
 from urllib.parse import urlparse, parse_qs
 from urlmatch import urlmatch
 from werkzeug.exceptions import HTTPException
+from youtube_transcript_api import YouTubeTranscriptApi
 
 from constants import APPLICATION_JSON
 from logger import logger
@@ -39,10 +40,17 @@ async def summarize():
         abort(400, f'summarize failed, e={e}')
 
     page_url = _parse_page_url_from_body(body)
+    language = _parse_language_from_body(body)
+
     query = urlparse(page_url).query
     vid = parse_qs(query).get('v', '') if query else ''
     if not vid:
         abort(400, f'vid not exists, page_url={page_url}')
+
+    transcript = YouTubeTranscriptApi.get_transcript(
+        video_id=vid,
+        languages=[language, 'en'],
+    )
 
     # TODO
 
@@ -55,3 +63,11 @@ def _parse_page_url_from_body(body: dict) -> str:
     if not urlmatch('https://*.youtube.com/watch*', page_url):
         abort(400, f'"page_url" not supported, page_url={page_url}')
     return page_url
+
+
+def _parse_language_from_body(body: dict) -> str:
+    language = body.get('language', '')
+    if not isinstance(language, str):
+        abort(400, f'"language" must be string')
+    language = language.strip()
+    return language if language else 'en'
