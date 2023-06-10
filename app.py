@@ -1,4 +1,5 @@
 from flask import Flask, abort, json, request
+from urlmatch import urlmatch
 from werkzeug.exceptions import HTTPException
 
 from constants import APPLICATION_JSON
@@ -25,4 +26,26 @@ def handle_exception(e):
     return response
 
 
-# TODO
+# {
+#   'page_url': str, required.
+#   'language': str, optional.
+# }
+@app.post('/api/summarize')
+async def summarize():
+    try:
+        body: dict = request.get_json()
+    except Exception as e:
+        abort(400, f'summarize failed, e={e}')
+
+    page_url = _parse_page_url_from_body(body)
+    # TODO
+
+
+def _parse_page_url_from_body(body: dict) -> str:
+    page_url = body.get('page_url', '')
+    if not isinstance(page_url, str):
+        abort(400, f'"page_url" must be string, page_url={page_url}')
+    page_url = page_url.strip()
+    if not urlmatch('https://*.youtube.com/watch*', page_url):
+        abort(400, f'"page_url" not supported, page_url={page_url}')
+    return page_url
