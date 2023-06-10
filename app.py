@@ -1,4 +1,5 @@
 from flask import Flask, abort, json, request
+from urllib.parse import urlparse, parse_qs
 from urlmatch import urlmatch
 from werkzeug.exceptions import HTTPException
 
@@ -38,6 +39,11 @@ async def summarize():
         abort(400, f'summarize failed, e={e}')
 
     page_url = _parse_page_url_from_body(body)
+    query = urlparse(page_url).query
+    vid = parse_qs(query).get('v', '') if query else ''
+    if not vid:
+        abort(400, f'vid not exists, page_url={page_url}')
+
     # TODO
 
 
