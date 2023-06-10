@@ -51,6 +51,8 @@ async def summarize():
         video_id=vid,
         languages=[language, 'en'],
     )
+    if not transcript:
+        abort(404, f'transcript not exists, page_url={page_url}')
 
     # TODO
 
