@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from dataclasses import dataclass, asdict
@@ -124,6 +125,7 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list
         data = list(map(lambda c: asdict(c), chapters))
         sse.publish(data, type=_SSE_TYPE_CHAPTERS)
 
+    tasks = []
     for i, c in enumerate(chapters):
         start_time = c.seconds
         end_time = chapters[i + 1].seconds if i + 1 < len(chapters) else maxsize  # nopep8.
@@ -132,9 +134,13 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list
             start_time=start_time,
             end_time=end_time,
         )
+        tasks.append(_summarize_chapter(chapter=c, timed_texts=texts))
 
-        await _summarize_chapter(chapter=c, timed_texts=texts)
-        # TODO (Matthew Lee) map reduce.
+    # Map reduce tasks for faster processing.
+    res = await asyncio.gather(*tasks, return_exceptions=True)
+    for r in res:
+        if isinstance(r, Exception):
+            logger.error(f'summarize, but has exception, vid={vid}, e={r}')
 
     return chapters
 
