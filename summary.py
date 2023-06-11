@@ -324,6 +324,13 @@ async def _summarize_chapter(vid: str, chapter: str, timed_texts: list[TimedText
         message = build_message(Role.USER, prompt)
         body = await chat(messages=[message], top_p=0.1, timeout=90)
         summary = get_content(body)
+
+        logger.info(f'summarize chapter, '
+                    f'vid={vid}, '
+                    f'chapter={chapter}, '
+                    f'is_first_summarize={is_first_summarize}, '
+                    f'summary=\n{summary}')
+
         is_first_summarize = False
 
     return summary.strip()

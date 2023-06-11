@@ -2,7 +2,7 @@ from logger import logger
 from summary import summarize
 
 VID = 'Ff4fRgnuFgQ'
-FILE = 'text_summary_timedtext.xml'
+FILE = './script/text_summary_timedtext.xml'
 CHAPTERS = [
     {
         "title": "Introduction",
@@ -87,5 +87,5 @@ async def test_summary():
     with open(FILE, 'r') as f:
         file = f.read()
 
-    chapters = summarize(vid=VID, timedtext=file)
+    chapters = await summarize(vid=VID, timedtext=file, chapters=CHAPTERS)
     logger.info(f'chapters={chapters}')
