@@ -34,7 +34,7 @@ def handle_exception(e):
 
 
 # {
-#   'page_url':  str,  required.
+#   'vid':       str,  required.
 #   'timedtext': str,  required.
 #   'chapters':  dict, optional.
 #   'language':  str,  optional.
@@ -46,15 +46,12 @@ async def summarize():
     except Exception as e:
         abort(400, f'summarize failed, e={e}')
 
-    page_url = _parse_page_url_from_body(body)
+    vid = _parse_vid_from_body(body)
     timedtext = _parse_timedtext_from_body(body)
     chapters = _parse_chapters_from_body(body)
-    language = _parse_language_from_body(body)
 
-    query = urlparse(page_url).query
-    vid = parse_qs(query).get('v', '') if query else ''
-    if not vid:
-        abort(400, f'vid not exists, page_url={page_url}')
+    language = _parse_language_from_body(body)
+    # TODO (Matthew Lee) translate.
 
     chapters = await summarizing(vid=vid, timedtext=timedtext, chapters=chapters)
     chapters = list(map(lambda c: asdict(c), chapters))
@@ -64,14 +61,14 @@ async def summarize():
     }
 
 
-def _parse_page_url_from_body(body: dict) -> str:
-    page_url = body.get('page_url', '')
-    if not isinstance(page_url, str):
-        abort(400, f'"page_url" must be string, page_url={page_url}')
-    page_url = page_url.strip()
-    if not urlmatch('https://*.youtube.com/watch*', page_url):
-        abort(400, f'"page_url" not supported, page_url={page_url}')
-    return page_url
+def _parse_vid_from_body(body: dict) -> str:
+    vid = body.get('vid', '')
+    if not isinstance(vid, str):
+        abort(400, f'"vid" must be string, vid={vid}')
+    vid = vid.strip()
+    if not vid:
+        abort(400, f'"vid" is empty')
+    return vid
 
 
 def _parse_timedtext_from_body(body: dict) -> str:
