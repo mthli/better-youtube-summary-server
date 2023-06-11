@@ -257,7 +257,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
     return chapters
 
 
-def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end_time: int) -> list[TimedText]:
+def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end_time: int = maxsize) -> list[TimedText]:
     res: list[TimedText] = []
 
     for t in timed_texts:

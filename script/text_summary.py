@@ -1,3 +1,4 @@
+from logger import logger
 from summary import summarize
 
 VID = 'Ff4fRgnuFgQ'
@@ -86,4 +87,5 @@ async def test_summary():
     with open(FILE, 'r') as f:
         file = f.read()
 
-    # TODO
+    chapters = summarize(vid=VID, timedtext=file)
+    logger.info(f'chapters={chapters}')
