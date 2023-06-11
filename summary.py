@@ -1,6 +1,7 @@
 import json
 
 from dataclasses import dataclass
+from sys import maxsize
 
 from bs4 import BeautifulSoup
 from flask import abort
@@ -56,6 +57,53 @@ Do not output any redundant explanation or information other than JSON.
 > JSON:
 '''
 
+# https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
+_SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value * 7 / 8  # nopep8, 3584.
+_SUMMARIZE_FIRST_CHAPTER_PROMPT = '''
+List the most important points of the following content.
+The content is taken from a video, possibly a conversation but without role markers.
+
+If a context is not important or doesn't make sense, don't include it to the output.
+Do not output redundant points, keep the output concise.
+Do not output any redundant explanation or information.
+
+> Content, and the chapter is about "{chapter}":
+>>>
+{content}
+>>>
+
+> CONCISE BULLET LIST SUMMARY:
+'''
+
+# https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L4
+_SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value * 5 / 8  # nopep8, 2560.
+_SUMMARIZE_NEXT_CHAPTER_PROMPT = '''
+Your job is to produce a final bullet list summary.
+
+We have provided an existing bullet list summary up to a certain point.
+We have the opportunity to refine the existing summary (only if needed) with some more content below.
+The content are taken from a video, possibly a conversation but without role markers.
+
+Refine the existing bullet list summary (only if needed) with the given content.
+Do not refine the existing summary with the given content if it isn't useful or doesn't make sense.
+Do not output redundant points, keep the output concise.
+Do not output any redundant explanation or information.
+
+If the existing bullet list summary is too long, you can summarize it again, keep the important points.
+
+> Existing bullet list summary, and the chapter is about "{chapter}":
+>>>
+{summary}
+>>>
+
+> More content, and the chapter is about "{chapter}":
+>>>
+{content}
+>>>
+
+> REFINE BULLET LIST SUMMARY:
+'''
+
 
 async def summarize(vid: str, timedtext: str, chapters: list[dict] = [], lang: str = 'en'):
     timed_texts = _parse_timed_texts(vid, timedtext)
@@ -66,12 +114,27 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = [], lang: s
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
 
-    # TODO
+    for i, c in enumerate(chapters):
+        start_time = c.seconds
+        end_time = chapters[i + 1].seconds if i + 1 < len(chapters) else maxsize  # nopep8.
+        texts = _get_timed_texts_in_range(
+            timed_texts=timed_texts,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        c.summary = await _summarize_chapter(
+            vid=vid,
+            chapter=c.chapter,
+            timed_texts=texts,
+            lang=lang,
+        )
+
+    return chapters
 
 
 def _parse_timed_texts(vid: str, src: str) -> list[TimedText]:
     timed_texts: list[TimedText] = []
-    soup = BeautifulSoup(src, 'lxml')
+    soup = BeautifulSoup(src, 'xml')
 
     transcript_el = soup.find('transcript')
     if not transcript_el:
@@ -158,7 +221,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
         )
 
         message = build_message(Role.USER, prompt)
-        body = await chat(messages=[message], top_p=0.1, timeout=120)
+        body = await chat(messages=[message], top_p=0.1, timeout=90)
         content = get_content(body)
         logger.info(f'detect chapters, vid={vid}, content=\n{content}')
 
@@ -192,3 +255,75 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
             timed_texts_start = end_at + 1
 
     return chapters
+
+
+def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end_time: int) -> list[TimedText]:
+    res: list[TimedText] = []
+
+    for t in timed_texts:
+        if start_time <= t.start and t.start < end_time:
+            res.append(t)
+
+    return res
+
+
+async def _summarize_chapter(vid: str, chapter: str, timed_texts: list[TimedText], lang: str = 'en') -> str:
+    summary = ''
+    summary_start = 0
+    is_first_summarize = True
+
+    while True:
+        texts = timed_texts[summary_start:]
+        if not texts:
+            break  # drained.
+
+        content = ''
+        content_has_changed = False
+
+        for t in texts:
+            temp = content + '\n' + t.text if content else t.text
+            if is_first_summarize:
+                prompt = _SUMMARIZE_FIRST_CHAPTER_PROMPT.format(
+                    chapter=chapter,
+                    content=temp,
+                )
+            else:
+                prompt = _SUMMARIZE_NEXT_CHAPTER_PROMPT.format(
+                    chapter=chapter,
+                    summary=summary,
+                    content=temp,
+                )
+
+            message = build_message(Role.USER, prompt)
+            token_limit = _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT \
+                if is_first_summarize else _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT
+            if count_tokens([message]) < token_limit:
+                content_has_changed = True
+                content = temp.strip()
+                summary_start += 1
+            else:
+                break  # for.
+
+        # FIXME (Matthew Lee) it is possible that content not changed, simply avoid redundant requests.
+        if not content_has_changed:
+            logger.warning(f'summarize chapter, but content not changed, vid={vid}')  # nopep8.
+            return summary.strip()
+
+        if is_first_summarize:
+            prompt = _SUMMARIZE_FIRST_CHAPTER_PROMPT.format(
+                chapter=chapter,
+                content=content,
+            )
+        else:
+            prompt = _SUMMARIZE_NEXT_CHAPTER_PROMPT.format(
+                chapter=chapter,
+                summary=summary,
+                content=content,
+            )
+
+        message = build_message(Role.USER, prompt)
+        body = await chat(messages=[message], top_p=0.1, timeout=90)
+        summary = get_content(body)
+        is_first_summarize = False
+
+    return summary.strip()
