@@ -42,7 +42,7 @@ def handle_exception(e):
 @app.post('/api/summarize')
 async def summarize():
     try:
-        body: dict = request.get_json()
+        body: dict = request.form.to_dict()
     except Exception as e:
         abort(400, f'summarize failed, e={e}')
 
