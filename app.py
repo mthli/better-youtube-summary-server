@@ -60,7 +60,7 @@ async def summarize():
     chapters = list(map(lambda c: asdict(c), chapters))
 
     return {
-        'summary': chapters,
+        'chapters': chapters,
     }
 
 
