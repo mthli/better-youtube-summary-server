@@ -1,11 +1,12 @@
 import json
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from sys import maxsize
 from uuid import uuid4
 
 from bs4 import BeautifulSoup
 from flask import abort
+from flask_sse import sse
 from logger import logger
 from openai import Role, TokenLimit, \
     build_message, \
@@ -29,6 +30,9 @@ class TimedText:
     dur: float = 0    # required; in seconds.
     text: str = ''    # required.
 
+
+_SSE_TYPE_CHAPTER = 'chapter'
+_SSE_TYPE_CHAPTERS = 'chapters'
 
 _DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value - 160  # nopep8, 3936.
 _DETECT_CHAPTERS_PROMPT = '''
@@ -115,6 +119,9 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list
         chapters = await _detect_chapters(vid, timed_texts)
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
+    else:
+        data = list(map(lambda c: asdict(c), chapters))
+        sse.publish(data, type=_SSE_TYPE_CHAPTERS)
 
     for i, c in enumerate(chapters):
         start_time = c.seconds
@@ -129,6 +136,7 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list
             chapter=c.chapter,
             timed_texts=texts,
         )
+        sse.publish(asdict(c), type=_SSE_TYPE_CHAPTER)
 
     return chapters
 
@@ -238,12 +246,14 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
             break  # drained.
 
         if timestamp and chapter and seconds >= 0:
-            chapters.append(Chapter(
+            data = Chapter(
                 cid=str(uuid4()),
                 timestamp=timestamp,
                 seconds=seconds,
                 chapter=chapter,
-            ))
+            )
+            chapters.append(data)
+            sse.publish(asdict(data), type=_SSE_TYPE_CHAPTER)
 
         # Looks like it's the end.
         # if type(end_at) is not int:  # NoneType.

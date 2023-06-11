@@ -12,7 +12,7 @@ from summary import summarize as summarizing
 
 app = Flask(__name__)
 app.config['REDIS_URL'] = 'redis://localhost'
-app.register_blueprint(sse, url_prefix='/api/summarizing')
+app.register_blueprint(sse, url_prefix='/api/sse')
 
 
 # https://flask.palletsprojects.com/en/2.2.x/errorhandling/#generic-exception-handler
