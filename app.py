@@ -1,9 +1,7 @@
 from dataclasses import asdict
-from urllib.parse import urlparse, parse_qs
 
 from flask import Flask, abort, json, request
 from flask_sse import sse
-from urlmatch import urlmatch
 from werkzeug.exceptions import HTTPException
 
 from constants import APPLICATION_JSON
