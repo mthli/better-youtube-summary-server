@@ -83,8 +83,8 @@ def _parse_timed_texts(vid: str, src: str) -> list[TimedText]:
 
     for text_el in text_els:
         timed_texts.append(TimedText(
-            start=text_el.attrs['start'],
-            dur=text_el.attrs['dur'],
+            start=float(text_el.attrs['start']),
+            dur=float(text_el.attrs['dur']),
             text=text_el.text,
         ))
 
