@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from flask import Flask, abort, json, request, url_for
+from flask import Flask, Response, abort, json, request, url_for
 from flask_sse import sse
 from werkzeug.exceptions import HTTPException
 
@@ -8,9 +8,11 @@ from constants import APPLICATION_JSON
 from logger import logger
 from summary import summarize as summarizing
 
+_SSE_URL_PREFIX = '/api/sse'
+
 app = Flask(__name__)
 app.config['REDIS_URL'] = 'redis://localhost:6379'
-app.register_blueprint(sse, url_prefix='/api/sse')
+app.register_blueprint(sse, url_prefix=_SSE_URL_PREFIX)
 
 
 # https://flask.palletsprojects.com/en/2.2.x/errorhandling/#generic-exception-handler
@@ -28,6 +30,16 @@ def handle_exception(e):
     })
     response.content_type = APPLICATION_JSON
     logger.error(f'errorhandler, data={response.data}')
+    return response
+
+
+# https://github.com/singingwolfboy/flask-sse/issues/3
+@app.after_request
+def add_nginx_sse_headers(response: Response):
+    if _SSE_URL_PREFIX not in request.url:
+        return response  # DO NOTHING.
+    response.headers['X-Accel-Buffering'] = 'no'
+    response.headers['Cache-Control'] = 'no-cache'
     return response
 
 
