@@ -2,6 +2,7 @@ import json
 
 from dataclasses import dataclass
 from sys import maxsize
+from uuid import uuid4
 
 from bs4 import BeautifulSoup
 from flask import abort
@@ -15,10 +16,11 @@ from openai import Role, TokenLimit, \
 
 @dataclass
 class Chapter:
-    timestamp: str = 0  # required.
-    seconds: int = 0    # required.
-    chapter: str = ''   # required.
-    summary: str = ''   # optional.
+    cid: str = ''        # required.
+    timestamp: str = ''  # required.
+    seconds: int = 0     # required.
+    chapter: str = ''    # required.
+    summary: str = ''    # optional.
 
 
 @dataclass
@@ -176,6 +178,7 @@ def _parse_chapters(vid: str, chapters: list[dict]) -> list[Chapter]:
                 seconds = int(array[0]) * 60 * 60 + int(array[1]) * 60 + int(array[2])  # nopep8.
 
             res.append(Chapter(
+                cid=str(uuid4()),
                 timestamp=timestamp,
                 seconds=seconds,
                 chapter=c['title'],
@@ -237,6 +240,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
 
         if timestamp and chapter and seconds >= 0:
             chapters.append(Chapter(
+                cid=str(uuid4()),
                 timestamp=timestamp,
                 seconds=seconds,
                 chapter=chapter,
