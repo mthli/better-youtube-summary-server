@@ -23,6 +23,7 @@ beautifulsoup4 = "*"
 flask-sse = "*"
 langcodes = "*"
 language-data = "*"
+lxml = "*"
 
 [dev-packages]
 autopep8 = "*"
