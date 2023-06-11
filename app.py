@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from flask import Flask, abort, json, request
+from flask import Flask, abort, json, request, url_for
 from flask_sse import sse
 from werkzeug.exceptions import HTTPException
 
@@ -9,7 +9,7 @@ from logger import logger
 from summary import summarize as summarizing
 
 app = Flask(__name__)
-app.config['REDIS_URL'] = 'redis://localhost'
+app.config['REDIS_URL'] = 'redis://localhost:6379'
 app.register_blueprint(sse, url_prefix='/api/sse')
 
 
@@ -51,6 +51,7 @@ async def summarize():
     language = _parse_language_from_body(body)
     # TODO (Matthew Lee) translate.
 
+    logger.info(f"summarize, sse.stream={url_for('sse.stream', channel=vid)}")
     chapters = await summarizing(vid=vid, timedtext=timedtext, chapters=chapters)
     chapters = list(map(lambda c: asdict(c), chapters))
 
