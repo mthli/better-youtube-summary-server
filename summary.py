@@ -132,12 +132,9 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list
             start_time=start_time,
             end_time=end_time,
         )
-        c.summary = await _summarize_chapter(
-            vid=vid,
-            chapter=c.chapter,
-            timed_texts=texts,
-        )
-        sse.publish(asdict(c), type=_SSE_TYPE_CHAPTER)
+
+        await _summarize_chapter(chapter=c, timed_texts=texts)
+        # TODO (Matthew Lee) map reduce.
 
     return chapters
 
@@ -283,7 +280,7 @@ def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end
     return res
 
 
-async def _summarize_chapter(vid: str, chapter: str, timed_texts: list[TimedText]) -> str:
+async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
     summary = ''
     summary_start = 0
     is_first_summarize = True
@@ -300,12 +297,12 @@ async def _summarize_chapter(vid: str, chapter: str, timed_texts: list[TimedText
             temp = content + '\n' + t.text if content else t.text
             if is_first_summarize:
                 prompt = _SUMMARIZE_FIRST_CHAPTER_PROMPT.format(
-                    chapter=chapter,
+                    chapter=chapter.chapter,
                     content=temp,
                 )
             else:
                 prompt = _SUMMARIZE_NEXT_CHAPTER_PROMPT.format(
-                    chapter=chapter,
+                    chapter=chapter.chapter,
                     summary=summary,
                     content=temp,
                 )
@@ -322,31 +319,33 @@ async def _summarize_chapter(vid: str, chapter: str, timed_texts: list[TimedText
 
         # FIXME (Matthew Lee) it is possible that content not changed, simply avoid redundant requests.
         if not content_has_changed:
-            logger.warning(f'summarize chapter, but content not changed, vid={vid}')  # nopep8.
-            return summary.strip()
+            logger.warning(f'summarize chapter, but content not changed, vid={chapter.vid}')  # nopep8.
+            break
 
         if is_first_summarize:
             prompt = _SUMMARIZE_FIRST_CHAPTER_PROMPT.format(
-                chapter=chapter,
+                chapter=chapter.chapter,
                 content=content,
             )
         else:
             prompt = _SUMMARIZE_NEXT_CHAPTER_PROMPT.format(
-                chapter=chapter,
+                chapter=chapter.chapter,
                 summary=summary,
                 content=content,
             )
 
         message = build_message(Role.USER, prompt)
         body = await chat(messages=[message], top_p=0.1, timeout=90)
-        summary = get_content(body)
+        summary = get_content(body).strip()
 
         logger.info(f'summarize chapter, '
-                    f'vid={vid}, '
+                    f'vid={chapter.vid}, '
                     f'chapter={chapter}, '
                     f'is_first_summarize={is_first_summarize}, '
                     f'summary=\n{summary}')
 
+        chapter.summary = summary  # cache even not finished.
         is_first_summarize = False
 
-    return summary.strip()
+    chapter.summary = summary.strip()
+    sse.publish(asdict(chapter), type=_SSE_TYPE_CHAPTER)
