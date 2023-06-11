@@ -81,7 +81,9 @@ pipenv install --dev
 Before run this project:
 
 - Set `openai_api_key` defined in `./rds.py` with `redis-cli`
-- TODO
+- Put `./bys.mthli.com.conf` to `/etc/nginx/conf.d/` directory
+- Execute `sudo certbot --nginx -d bys.mthli.com` to generate certificates, or
+- Execute `sudo certbot renew` to avoid certificates expired after 90 days
 
 Then just execute commands as follow:
 
