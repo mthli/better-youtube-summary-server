@@ -17,6 +17,7 @@ from openai import Role, TokenLimit, \
 
 @dataclass
 class Chapter:
+    vid: str = ''        # required.
     cid: str = ''        # required.
     timestamp: str = ''  # required.
     seconds: int = 0     # required.
@@ -185,6 +186,7 @@ def _parse_chapters(vid: str, chapters: list[dict]) -> list[Chapter]:
                 seconds = int(array[0]) * 60 * 60 + int(array[1]) * 60 + int(array[2])  # nopep8.
 
             res.append(Chapter(
+                vid=vid,
                 cid=str(uuid4()),
                 timestamp=timestamp,
                 seconds=seconds,
@@ -247,6 +249,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
 
         if timestamp and chapter and seconds >= 0:
             data = Chapter(
+                vid=vid,
                 cid=str(uuid4()),
                 timestamp=timestamp,
                 seconds=seconds,
