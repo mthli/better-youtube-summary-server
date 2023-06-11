@@ -1,13 +1,18 @@
-from flask import Flask, abort, json, request
+from dataclasses import asdict
 from urllib.parse import urlparse, parse_qs
+
+from flask import Flask, abort, json, request
+from flask_sse import sse
 from urlmatch import urlmatch
 from werkzeug.exceptions import HTTPException
-from youtube_transcript_api import YouTubeTranscriptApi
 
 from constants import APPLICATION_JSON
 from logger import logger
+from summary import summarize as summarizing
 
 app = Flask(__name__)
+app.config['REDIS_URL'] = 'redis://localhost'
+app.register_blueprint(sse, url_prefix='/api/summarizing')
 
 
 # https://flask.palletsprojects.com/en/2.2.x/errorhandling/#generic-exception-handler
@@ -29,8 +34,10 @@ def handle_exception(e):
 
 
 # {
-#   'page_url': str, required.
-#   'language': str, optional.
+#   'page_url':  str,  required.
+#   'timedtext': str,  required.
+#   'chapters':  dict, optional.
+#   'language':  str,  optional.
 # }
 @app.post('/api/summarize')
 async def summarize():
@@ -40,6 +47,8 @@ async def summarize():
         abort(400, f'summarize failed, e={e}')
 
     page_url = _parse_page_url_from_body(body)
+    timedtext = _parse_timedtext_from_body(body)
+    chapters = _parse_chapters_from_body(body)
     language = _parse_language_from_body(body)
 
     query = urlparse(page_url).query
@@ -47,14 +56,12 @@ async def summarize():
     if not vid:
         abort(400, f'vid not exists, page_url={page_url}')
 
-    transcript = YouTubeTranscriptApi.get_transcript(
-        video_id=vid,
-        languages=[language, 'en'],
-    )
-    if not transcript:
-        abort(404, f'transcript not exists, page_url={page_url}')
+    chapters = await summarizing(vid=vid, timedtext=timedtext, chapters=chapters)
+    chapters = list(map(lambda c: asdict(c), chapters))
 
-    # TODO
+    return {
+        'summary': chapters,
+    }
 
 
 def _parse_page_url_from_body(body: dict) -> str:
@@ -65,6 +72,26 @@ def _parse_page_url_from_body(body: dict) -> str:
     if not urlmatch('https://*.youtube.com/watch*', page_url):
         abort(400, f'"page_url" not supported, page_url={page_url}')
     return page_url
+
+
+def _parse_timedtext_from_body(body: dict) -> str:
+    timedtext = body.get('timedtext', '')
+    if not isinstance(timedtext, str):
+        abort(400, f'"timedtext" must be string')
+    timedtext = timedtext.strip()
+    if not timedtext:
+        abort(400, f'"timedtext" is empty')
+    return timedtext
+
+
+def _parse_chapters_from_body(body: dict) -> list[dict]:
+    chapters = body.get('chapters', [])
+    if not isinstance(chapters, list):
+        abort(400, f'"chapters" must be list')
+    for c in chapters:
+        if not isinstance(c, dict):
+            abort(400, f'"chapters" item must be dict')
+    return chapters
 
 
 def _parse_language_from_body(body: dict) -> str:

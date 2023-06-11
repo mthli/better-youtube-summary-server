@@ -25,8 +25,8 @@ class Chapter:
 
 @dataclass
 class TimedText:
-    start: float = 0  # seconds; required.
-    dur: float = 0    # seconds; required.
+    start: float = 0  # required; in seconds.
+    dur: float = 0    # required; in seconds.
     text: str = ''    # required.
 
 
@@ -107,7 +107,7 @@ If the existing bullet list summary is too long, you can summarize it again, kee
 '''
 
 
-async def summarize(vid: str, timedtext: str, chapters: list[dict] = [], lang: str = 'en'):
+async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list[Chapter]:
     timed_texts = _parse_timed_texts(vid, timedtext)
 
     chapters: list[Chapter] = _parse_chapters(vid, chapters)
@@ -128,7 +128,6 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = [], lang: s
             vid=vid,
             chapter=c.chapter,
             timed_texts=texts,
-            lang=lang,
         )
 
     return chapters
@@ -271,7 +270,7 @@ def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end
     return res
 
 
-async def _summarize_chapter(vid: str, chapter: str, timed_texts: list[TimedText], lang: str = 'en') -> str:
+async def _summarize_chapter(vid: str, chapter: str, timed_texts: list[TimedText]) -> str:
     summary = ''
     summary_start = 0
     is_first_summarize = True
