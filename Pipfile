@@ -20,7 +20,6 @@ apscheduler = "*"
 pycryptodome = "*"
 youtube-transcript-api = "*"
 gevent = "*"
-readability-lxml = "*"
 beautifulsoup4 = "*"
 lxml = "*"
 
