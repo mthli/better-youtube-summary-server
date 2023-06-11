@@ -123,7 +123,7 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
         data = list(map(lambda c: asdict(c), chapters))
-        sse.publish(data, type=_SSE_TYPE_CHAPTERS)
+        sse.publish(data, type=_SSE_TYPE_CHAPTERS, channel=vid)
 
     tasks = []
     for i, c in enumerate(chapters):
@@ -259,7 +259,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
                 chapter=chapter,
             )
             chapters.append(data)
-            sse.publish(asdict(data), type=_SSE_TYPE_CHAPTER)
+            sse.publish(asdict(data), type=_SSE_TYPE_CHAPTER, channel=vid)
 
         # Looks like it's the end.
         # if type(end_at) is not int:  # NoneType.
@@ -354,4 +354,4 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
         is_first_summarize = False
 
     chapter.summary = summary.strip()
-    sse.publish(asdict(chapter), type=_SSE_TYPE_CHAPTER)
+    sse.publish(asdict(chapter), type=_SSE_TYPE_CHAPTER, channel=chapter.vid)
