@@ -20,8 +20,9 @@ apscheduler = "*"
 pycryptodome = "*"
 gevent = "*"
 beautifulsoup4 = "*"
-lxml = "*"
 flask-sse = "*"
+langcodes = "*"
+language-data = "*"
 
 [dev-packages]
 autopep8 = "*"
