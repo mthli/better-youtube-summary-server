@@ -92,5 +92,6 @@ async def test_summary():
         file = f.read()
 
     chapters = await summarize(vid=VID, timedtext=file, chapters=CHAPTERS)
-    dumps = json.dumps(asdict(chapters), ensure_ascii=False)
+    chapters = list(map(lambda c: asdict(c), chapters))
+    dumps = json.dumps(chapters, ensure_ascii=False)
     logger.info(f'dumps={dumps}')
