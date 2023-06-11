@@ -35,6 +35,7 @@ class TimedText:
 
 _SSE_TYPE_CHAPTER = 'chapter'
 _SSE_TYPE_CHAPTERS = 'chapters'
+_SSE_TYPE_CLOSE = 'close'
 
 _DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value - 160  # nopep8, 3936.
 _DETECT_CHAPTERS_PROMPT = '''
@@ -142,6 +143,7 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list
         if isinstance(r, Exception):
             logger.error(f'summarize, but has exception, vid={vid}, e={r}')
 
+    sse.publish({'vid': vid}, type=_SSE_TYPE_CLOSE, channel=vid)
     return chapters
 
 
