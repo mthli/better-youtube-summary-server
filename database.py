@@ -52,6 +52,29 @@ def create_chapter_table():
         ''')
 
 
+def find_chapters_by_vid(vid: str) -> list[Chapter]:
+    res = fetchall(f'''
+        SELECT
+              {_COLUMN_CID},
+              {_COLUMN_VID},
+              {_COLUMN_TIMESTAMP},
+              {_COLUMN_SECONDS},
+              {_COLUMN_CHAPTER},
+              {_COLUMN_SUMMARY}
+         FROM {_TABLE}
+        WHERE {_COLUMN_VID} = '{sqlescape(vid)}'
+        ORDER BY {_COLUMN_SECONDS} ASC
+        ''')
+    return list(map(lambda r: Chapter(
+        cid=r[0],
+        vid=r[1],
+        timestamp=r[2],
+        seconds=r[3],
+        chapter=r[4],
+        summary=r[5],
+    ), res))
+
+
 def insert_chapters(chapters: list[Chapter]):
     for c in chapters:
         _insert_chapter(c)
