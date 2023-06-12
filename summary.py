@@ -6,8 +6,7 @@ from sys import maxsize
 from uuid import uuid4
 
 from bs4 import BeautifulSoup
-from flask import abort
-from flask_sse import sse
+from quart import abort
 
 from database import Chapter
 from logger import logger
@@ -16,6 +15,7 @@ from openai import Role, TokenLimit, \
     chat, \
     count_tokens, \
     get_content
+from sse import sse
 
 
 @dataclass

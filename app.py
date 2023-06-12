@@ -1,8 +1,7 @@
 from dataclasses import asdict
 from enum import unique
 
-from flask_sse import sse
-from quart import Quart, Response, abort, json, request, url_for
+from quart import Quart, abort, json, request, url_for
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 
@@ -14,6 +13,7 @@ from database import Chapter, \
     delete_chapters_by_vid
 from logger import logger
 from rds import rds
+from sse import sse
 from summary import summarize as summarizing
 
 
@@ -47,16 +47,6 @@ def handle_exception(e: HTTPException):
     })
     response.content_type = APPLICATION_JSON
     logger.error(f'errorhandler, data={response.data}')
-    return response
-
-
-# https://github.com/singingwolfboy/flask-sse/issues/3
-@app.after_request
-def add_nginx_sse_headers(response: Response):
-    if _SSE_URL_PREFIX not in request.url:
-        return response  # DO NOTHING.
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Cache-Control'] = 'no-cache'
     return response
 
 

@@ -4,7 +4,7 @@ import tiktoken
 
 from dataclasses import dataclass, asdict
 from enum import IntEnum, unique
-from flask import abort
+from quart import abort
 from strenum import StrEnum
 from tenacity import after_log, retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 from werkzeug.exceptions import BadGateway, TooManyRequests
