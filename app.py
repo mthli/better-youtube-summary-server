@@ -5,7 +5,9 @@ from flask_sse import sse
 from werkzeug.exceptions import HTTPException
 
 from constants import APPLICATION_JSON
-from database import create_chapter_table
+from database import create_chapter_table, \
+    insert_chapters, \
+    delete_chapters_by_vid
 from logger import logger
 from summary import summarize as summarizing
 
@@ -71,8 +73,9 @@ async def summarize():
     chapters = list(map(lambda c: asdict(c), chapters))
 
     if not has_exception:
-        # TODO (Matthew Lee) cache.
-        pass
+        logger.info(f'summarize, cache it, vid={vid}')
+        delete_chapters_by_vid(vid)
+        insert_chapters(chapters)
 
     return {
         'chapters': chapters,
