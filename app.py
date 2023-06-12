@@ -13,7 +13,7 @@ from database import Chapter, \
     delete_chapters_by_vid
 from logger import logger
 from rds import rds
-from sse2 import sse_subscribe
+from sse import sse_subscribe
 from summary import summarize as summarizing
 
 

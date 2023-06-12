@@ -15,7 +15,7 @@ from openai import Role, TokenLimit, \
     chat, \
     count_tokens, \
     get_content
-from sse2 import SseEvent, sse_publish
+from sse import SseEvent, sse_publish
 
 
 @dataclass
