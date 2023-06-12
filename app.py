@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from enum import unique
 
-from quart import Quart, abort, json, request, url_for
+from quart import Quart, abort, json, request
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 
@@ -13,7 +13,6 @@ from database import Chapter, \
     delete_chapters_by_vid
 from logger import logger
 from rds import rds
-from sse import sse
 from summary import summarize as summarizing
 
 
@@ -23,12 +22,7 @@ class State(StrEnum):
     FINISHED = 'finished'
 
 
-_SSE_URL_PREFIX = '/api/sse'
-
 app = Quart(__name__)
-app.config['REDIS_URL'] = 'redis://localhost:6379'
-app.register_blueprint(sse, url_prefix=_SSE_URL_PREFIX)
-
 create_chapter_table()
 
 
@@ -81,7 +75,6 @@ async def summarize():
         return _build_summarize_response([], State.PROCESSING)
     rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
 
-    logger.info(f"summarize, sse.stream={url_for('sse.stream', channel=vid)}")
     chapters, has_exception = await summarizing(vid, timedtext, chapters)
 
     if not has_exception:
