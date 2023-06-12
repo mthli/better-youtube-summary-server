@@ -1,7 +1,9 @@
 from dataclasses import asdict
+from enum import unique
 
 from flask import Flask, Response, abort, json, request, url_for
 from flask_sse import sse
+from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 
 from constants import APPLICATION_JSON
@@ -11,7 +13,15 @@ from database import Chapter, \
     insert_chapters, \
     delete_chapters_by_vid
 from logger import logger
+from rds import rds
 from summary import summarize as summarizing
+
+
+@unique
+class State(StrEnum):
+    PROCESSING = 'processing'
+    FINISHED = 'finished'
+
 
 _SSE_URL_PREFIX = '/api/sse'
 
@@ -72,7 +82,14 @@ async def summarize():
     found = find_chapters_by_vid(vid)
     if found:
         logger.info(f'summarize, found chapters in database, vid={vid}')
-        return _build_summarize_response(found)
+        return _build_summarize_response(found, State.FINISHED)
+
+    rds_key = f'summarize_{vid}'
+    if rds.exists(rds_key):
+        logger.info(f'summarize, but repeated, vid={vid}')
+        rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
+        return _build_summarize_response([], State.PROCESSING)
+    rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
 
     logger.info(f"summarize, sse.stream={url_for('sse.stream', channel=vid)}")
     chapters, has_exception = await summarizing(vid, timedtext, chapters)
@@ -82,7 +99,8 @@ async def summarize():
         delete_chapters_by_vid(vid)
         insert_chapters(chapters)
 
-    return _build_summarize_response(chapters)
+    rds.delete(rds_key)
+    return _build_summarize_response(chapters, State.FINISHED)
 
 
 def _parse_vid_from_body(body: dict) -> str:
@@ -123,8 +141,9 @@ def _parse_language_from_body(body: dict) -> str:
     return language if language else 'en'
 
 
-def _build_summarize_response(chapters: list[Chapter]) -> dict:
+def _build_summarize_response(chapters: list[Chapter], state: State) -> dict:
     chapters = list(map(lambda c: asdict(c), chapters))
     return {
         'chapters': chapters,
+        'state': state.value,
     }
