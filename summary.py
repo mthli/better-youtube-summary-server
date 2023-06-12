@@ -9,22 +9,14 @@ from uuid import uuid4
 from bs4 import BeautifulSoup
 from flask import abort
 from flask_sse import sse
+
+from database import Chapter
 from logger import logger
 from openai import Role, TokenLimit, \
     build_message, \
     chat, \
     count_tokens, \
     get_content
-
-
-@dataclass
-class Chapter:
-    vid: str = ''        # required.
-    cid: str = ''        # required.
-    timestamp: str = ''  # required.
-    seconds: int = 0     # required.
-    chapter: str = ''    # required.
-    summary: str = ''    # optional.
 
 
 @dataclass
@@ -194,8 +186,8 @@ def _parse_chapters(vid: str, chapters: list[dict]) -> list[Chapter]:
                 seconds = int(array[0]) * 60 * 60 + int(array[1]) * 60 + int(array[2])  # nopep8.
 
             res.append(Chapter(
-                vid=vid,
                 cid=str(uuid4()),
+                vid=vid,
                 timestamp=timestamp,
                 seconds=seconds,
                 chapter=c['title'],
@@ -257,8 +249,8 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
 
         if timestamp and chapter and seconds >= 0:
             data = Chapter(
-                vid=vid,
                 cid=str(uuid4()),
+                vid=vid,
                 timestamp=timestamp,
                 seconds=seconds,
                 chapter=chapter,

@@ -5,6 +5,7 @@ from flask_sse import sse
 from werkzeug.exceptions import HTTPException
 
 from constants import APPLICATION_JSON
+from database import create_chapter_table
 from logger import logger
 from summary import summarize as summarizing
 
@@ -13,6 +14,8 @@ _SSE_URL_PREFIX = '/api/sse'
 app = Flask(__name__)
 app.config['REDIS_URL'] = 'redis://localhost:6379'
 app.register_blueprint(sse, url_prefix=_SSE_URL_PREFIX)
+
+create_chapter_table()
 
 
 # https://flask.palletsprojects.com/en/2.2.x/errorhandling/#generic-exception-handler
