@@ -2,11 +2,11 @@
   "apps": [
     {
       "name": "better-youtube-summary-server",
-      "script": "python3 -m pipenv run gunicorn -k gevent --timeout 300 app:app",
+      "script": "python3 -m pipenv run hypercorn app:app",
       "exec_mode": "fork",
       "kill_timeout": 5000,
       "listen_timeout": 10000,
-      "max_memory_restart": "128M",
+      "max_memory_restart": "512M",
       "watch": false
     }
   ]
