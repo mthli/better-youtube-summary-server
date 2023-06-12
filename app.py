@@ -5,7 +5,9 @@ from flask_sse import sse
 from werkzeug.exceptions import HTTPException
 
 from constants import APPLICATION_JSON
-from database import create_chapter_table, \
+from database import Chapter, \
+    create_chapter_table, \
+    find_chapters_by_vid, \
     insert_chapters, \
     delete_chapters_by_vid
 from logger import logger
@@ -64,22 +66,23 @@ async def summarize():
     vid = _parse_vid_from_body(body)
     timedtext = _parse_timedtext_from_body(body)
     chapters = _parse_chapters_from_body(body)
-
     language = _parse_language_from_body(body)
     # TODO (Matthew Lee) translate.
 
+    found = find_chapters_by_vid(vid)
+    if found:
+        logger.info(f'summarize, found chapters in database, vid={vid}')
+        return _build_summarize_response(found)
+
     logger.info(f"summarize, sse.stream={url_for('sse.stream', channel=vid)}")
-    chapters, has_exception = await summarizing(vid=vid, timedtext=timedtext, chapters=chapters)
-    chapters = list(map(lambda c: asdict(c), chapters))
+    chapters, has_exception = await summarizing(vid, timedtext, chapters)
 
     if not has_exception:
-        logger.info(f'summarize, cache it, vid={vid}')
+        logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
         insert_chapters(chapters)
 
-    return {
-        'chapters': chapters,
-    }
+    return _build_summarize_response(chapters)
 
 
 def _parse_vid_from_body(body: dict) -> str:
@@ -118,3 +121,10 @@ def _parse_language_from_body(body: dict) -> str:
         abort(400, f'"language" must be string')
     language = language.strip()
     return language if language else 'en'
+
+
+def _build_summarize_response(chapters: list[Chapter]) -> dict:
+    chapters = list(map(lambda c: asdict(c), chapters))
+    return {
+        'chapters': chapters,
+    }
