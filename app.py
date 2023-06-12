@@ -13,7 +13,7 @@ from database import Chapter, \
     delete_chapters_by_vid
 from logger import logger
 from rds import rds
-from sse import sse_subscribe
+from sse import SseEvent, sse_publish, sse_subscribe
 from summary import summarize as summarizing
 
 
@@ -48,7 +48,14 @@ def handle_exception(e: HTTPException):
 @app.get('/api/sse')
 async def sse():
     vid = _parse_vid_from_body(request.args.to_dict())
-    logger.info(f'sse, vid={vid}')
+
+    chapters = find_chapters_by_vid(vid)
+    if chapters:
+        logger.info(f'sse, found chapters in database, vid={vid}')
+        data = list(map(lambda c: asdict(c), chapters))
+        await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
+        await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
+        return _build_summarize_response(chapters, State.FINISHED)
 
     # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
     res = await make_response(
@@ -69,7 +76,6 @@ async def sse():
 #   'vid':       str,  required.
 #   'timedtext': str,  required.
 #   'chapters':  dict, optional.
-#   'language':  str,  optional.
 # }
 @app.post('/api/summarize')
 async def summarize():
@@ -81,8 +87,6 @@ async def summarize():
     vid = _parse_vid_from_body(body)
     timedtext = _parse_timedtext_from_body(body)
     chapters = _parse_chapters_from_body(body)
-    language = _parse_language_from_body(body)
-    # TODO (Matthew Lee) translate.
 
     found = find_chapters_by_vid(vid)
     if found:
@@ -137,12 +141,12 @@ def _parse_chapters_from_body(body: dict) -> list[dict]:
     return chapters
 
 
-def _parse_language_from_body(body: dict) -> str:
-    language = body.get('language', '')
-    if not isinstance(language, str):
-        abort(400, f'"language" must be string')
-    language = language.strip()
-    return language if language else 'en'
+# def _parse_language_from_body(body: dict) -> str:
+#     language = body.get('language', '')
+#     if not isinstance(language, str):
+#         abort(400, f'"language" must be string')
+#     language = language.strip()
+#     return language if language else 'en'
 
 
 def _build_summarize_response(chapters: list[Chapter], state: State) -> dict:
