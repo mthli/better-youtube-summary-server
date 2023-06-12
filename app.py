@@ -49,13 +49,13 @@ def handle_exception(e: HTTPException):
 async def sse():
     vid = _parse_vid_from_body(request.args.to_dict())
 
-    chapters = find_chapters_by_vid(vid)
-    if chapters:
+    found = find_chapters_by_vid(vid)
+    if found:
         logger.info(f'sse, found chapters in database, vid={vid}')
-        data = list(map(lambda c: asdict(c), chapters))
+        data = list(map(lambda c: asdict(c), found))
         await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
         await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
-        return _build_summarize_response(chapters, State.FINISHED)
+        return _build_summarize_response(found, State.FINISHED)
 
     # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
     res = await make_response(
