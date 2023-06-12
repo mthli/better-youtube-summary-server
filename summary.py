@@ -3,6 +3,7 @@ import json
 
 from dataclasses import dataclass, asdict
 from sys import maxsize
+from typing import Tuple
 from uuid import uuid4
 
 from bs4 import BeautifulSoup
@@ -114,7 +115,7 @@ If the existing bullet list summary is too long, you can summarize it again, kee
 '''
 
 
-async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list[Chapter]:
+async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> Tuple(list[Chapter], bool):
     timed_texts = _parse_timed_texts(vid, timedtext)
 
     chapters: list[Chapter] = _parse_chapters(vid, chapters)
@@ -137,14 +138,16 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> list
         )
         tasks.append(_summarize_chapter(chapter=c, timed_texts=texts))
 
-    # Map reduce tasks for faster processing.
     res = await asyncio.gather(*tasks, return_exceptions=True)
+    has_exception = False
+
     for r in res:
         if isinstance(r, Exception):
             logger.error(f'summarize, but has exception, vid={vid}, e={r}')
+            has_exception = True
 
     sse.publish({'vid': vid}, type=_SSE_TYPE_CLOSE, channel=vid)
-    return chapters
+    return chapters, has_exception
 
 
 def _parse_timed_texts(vid: str, src: str) -> list[TimedText]:

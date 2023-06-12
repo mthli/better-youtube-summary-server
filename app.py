@@ -64,8 +64,12 @@ async def summarize():
     # TODO (Matthew Lee) translate.
 
     logger.info(f"summarize, sse.stream={url_for('sse.stream', channel=vid)}")
-    chapters = await summarizing(vid=vid, timedtext=timedtext, chapters=chapters)
+    chapters, has_exception = await summarizing(vid=vid, timedtext=timedtext, chapters=chapters)
     chapters = list(map(lambda c: asdict(c), chapters))
+
+    if not has_exception:
+        # TODO (Matthew Lee) cache.
+        pass
 
     return {
         'chapters': chapters,
