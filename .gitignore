@@ -160,5 +160,8 @@ cython_debug/
 #.idea/
 
 # Others
-.vscode/
 .DS_Store
+.vscode/
+*.db
+*.db-shm
+*.db-wal
