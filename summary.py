@@ -3,7 +3,6 @@ import json
 
 from dataclasses import dataclass, asdict
 from sys import maxsize
-from typing import Tuple
 from uuid import uuid4
 
 from bs4 import BeautifulSoup
@@ -107,7 +106,7 @@ If the existing bullet list summary is too long, you can summarize it again, kee
 '''
 
 
-async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> Tuple(list[Chapter], bool):
+async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tuple[list[Chapter], bool]:
     timed_texts = _parse_timed_texts(vid, timedtext)
 
     chapters: list[Chapter] = _parse_chapters(vid, chapters)
