@@ -1,8 +1,8 @@
 from dataclasses import asdict
 from enum import unique
 
-from flask import Flask, Response, abort, json, request, url_for
 from flask_sse import sse
+from quart import Quart, Response, abort, json, request, url_for
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 
@@ -25,7 +25,7 @@ class State(StrEnum):
 
 _SSE_URL_PREFIX = '/api/sse'
 
-app = Flask(__name__)
+app = Quart(__name__)
 app.config['REDIS_URL'] = 'redis://localhost:6379'
 app.register_blueprint(sse, url_prefix=_SSE_URL_PREFIX)
 
@@ -38,7 +38,7 @@ create_chapter_table()
 # HTTPException subclasses show a generic message about their code,
 # while other exceptions are converted to a generic "500 Internal Server Error".
 @app.errorhandler(HTTPException)
-def handle_exception(e):
+def handle_exception(e: HTTPException):
     response = e.get_response()
     response.data = json.dumps({
         'code': e.code,
@@ -69,7 +69,7 @@ def add_nginx_sse_headers(response: Response):
 @app.post('/api/summarize')
 async def summarize():
     try:
-        body: dict = request.form.to_dict()
+        body: dict = (await request.form).to_dict()
     except Exception as e:
         abort(400, f'summarize failed, e={e}')
 
