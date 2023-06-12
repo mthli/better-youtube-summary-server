@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlite import commit, fetchall, sqlescape
 
@@ -101,4 +100,11 @@ def _insert_chapter(chapter: Chapter):
              STRFTIME('%s', 'NOW'),
              STRFTIME('%s', 'NOW')
         )
+        ''')
+
+
+def delete_chapters_by_vid(vid: str):
+    commit(f'''
+        DELETE FROM {_TABLE}
+        WHERE {_COLUMN_VID} = '{sqlescape(vid)}'
         ''')
