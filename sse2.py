@@ -25,7 +25,9 @@ class Message:
 
     def __str__(self) -> str:
         data_str = json.dumps(self.data)
-        return f'event: {self.event}\ndata: {data_str}\n\n'
+        lines = [f'data: {line}' for line in data_str.splitlines()]
+        lines.insert(0, f'event: {self.event}')
+        return '\n'.join(lines) + '\n\n'
 
 
 def sse_publish(channel: str, event: SseEvent, data: dict or list[dict]) -> int:
