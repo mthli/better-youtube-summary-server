@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from enum import unique
 
-from quart import Quart, abort, json, request
+from quart import Quart, abort, json, request, make_response
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 
@@ -13,6 +13,7 @@ from database import Chapter, \
     delete_chapters_by_vid
 from logger import logger
 from rds import rds
+from sse2 import sse_subscribe
 from summary import summarize as summarizing
 
 
@@ -42,6 +43,26 @@ def handle_exception(e: HTTPException):
     response.content_type = APPLICATION_JSON
     logger.error(f'errorhandler, data={response.data}')
     return response
+
+
+@app.get('/api/sse')
+async def sse():
+    vid = _parse_vid_from_body(request.args.to_dict())
+    logger.info(f'sse, vid={vid}')
+
+    # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
+    res = await make_response(
+        sse_subscribe(vid),
+        {
+            'Content-Type': 'text/event-stream',
+            'Transfer-Encoding': 'chunked',
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+        },
+    )
+
+    res.timeout = None
+    return res
 
 
 # {
