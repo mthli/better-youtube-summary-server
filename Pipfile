@@ -24,6 +24,8 @@ flask-sse = "*"
 langcodes = "*"
 language-data = "*"
 lxml = "*"
+quart = "*"
+hypercorn = "*"
 
 [dev-packages]
 autopep8 = "*"
