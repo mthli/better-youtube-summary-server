@@ -43,13 +43,14 @@ async def sse_subscribe(channel: str):
 
     try:
         while True:
-            obj: dict = await pubsub.get_message(ignore_subscribe_messages=True)
-            message = Message(**json.loads(obj['data']))
-            yield str(message)
+            obj = await pubsub.get_message(ignore_subscribe_messages=True)
+            if isinstance(obj, dict):
+                message = Message(**json.loads(obj['data']))
+                yield str(message)
 
-            if message.event == SseEvent.CLOSE:
-                logger.info(f'subscribe, should be closed, channel={channel}')
-                break
+                if message.event == SseEvent.CLOSE:
+                    logger.info(f'subscribe, on close, channel={channel}')
+                    break
     finally:
         await sse_unsubscribe(channel)
 
