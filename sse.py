@@ -2,12 +2,11 @@ import json
 
 from dataclasses import dataclass, asdict, field
 from enum import unique
-from typing import Any
 
 from strenum import StrEnum
 
 from logger import logger
-from rds import rds
+from rds import ards
 
 
 @unique
@@ -30,31 +29,31 @@ class Message:
         return '\n'.join(lines) + '\n\n'
 
 
-def sse_publish(channel: str, event: SseEvent, data: dict or list[dict]) -> int:
+async def sse_publish(channel: str, event: SseEvent, data: dict or list[dict]):
     message = Message(event=event.value, data=data)
     message = json.dumps(asdict(message))
-    return rds.publish(channel=channel, message=message)
+    await ards.publish(channel=channel, message=message)
 
 
+# https://aioredis.readthedocs.io/en/latest/getting-started/#pubsub-mode
 async def sse_subscribe(channel: str):
-    pubsub = rds.pubsub()
-    pubsub.subscribe(channel)
+    pubsub = ards.pubsub()
+    await pubsub.subscribe(channel)
     logger.info(f'subscribe, channel={channel}')
 
-    try:
-        for d in pubsub.listen():
-            logger.info(f'listen, channel={channel}, d={d}')
-            if isinstance(d, dict) and d['type'] == 'message':
-                yield str(Message(**json.loads(d['data'])))
-            else:
-                yield str(Message(event=SseEvent.UNKNOWN))
-    finally:
-        sse_unsubscribe(channel)
+    while True:
+        try:
+            message = await pubsub.get_message(ignore_subscribe_messages=True)
+            if isinstance(message, dict):
+                logger.info(f'subscribe, message={message}')
+                yield str(Message(**json.loads(message['data'])))
+        finally:
+            await sse_unsubscribe(channel)
 
 
-def sse_unsubscribe(channel: str):
+async def sse_unsubscribe(channel: str):
     try:
-        rds.pubsub().unsubscribe(channel)
+        await ards.pubsub().unsubscribe(channel)
         logger.info(f'unsubscribe, channel={channel}')
     except Exception:
         logger.exception(f'unsubscribe, channel={channel}')

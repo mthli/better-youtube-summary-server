@@ -112,7 +112,7 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tupl
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
         data = list(map(lambda c: asdict(c), chapters))
-        sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
+        await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
 
     tasks = []
     for i, c in enumerate(chapters):
@@ -133,7 +133,7 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tupl
             logger.error(f'summarize, but has exception, vid={vid}, e={r}')
             has_exception = True
 
-    sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
+    await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
     return chapters, has_exception
 
 
@@ -252,7 +252,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
             )
 
             chapters.append(data)
-            sse_publish(
+            await sse_publish(
                 channel=vid,
                 event=SseEvent.CHAPTER,
                 data=asdict(data),
@@ -351,7 +351,7 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
         is_first_summarize = False
 
     chapter.summary = summary.strip()
-    sse_publish(
+    await sse_publish(
         channel=chapter.vid,
         event=SseEvent.CHAPTER,
         data=asdict(chapter),
