@@ -15,7 +15,7 @@ from openai import Role, TokenLimit, \
     chat, \
     count_tokens, \
     get_content
-from sse2 import sse_publish
+from sse2 import SseEvent, sse_publish
 
 
 @dataclass
@@ -24,10 +24,6 @@ class TimedText:
     dur: float = 0    # required; in seconds.
     text: str = ''    # required.
 
-
-_SSE_EVENT_CHAPTER = 'chapter'
-_SSE_EVENT_CHAPTERS = 'chapters'
-_SSE_EVENT_CLOSE = 'close'
 
 _DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value - 160  # nopep8, 3936.
 _DETECT_CHAPTERS_PROMPT = '''
@@ -116,7 +112,7 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tupl
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
         data = list(map(lambda c: asdict(c), chapters))
-        sse_publish(channel=vid, event=_SSE_EVENT_CHAPTERS, data=data)
+        sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
 
     tasks = []
     for i, c in enumerate(chapters):
@@ -137,7 +133,7 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tupl
             logger.error(f'summarize, but has exception, vid={vid}, e={r}')
             has_exception = True
 
-    sse_publish(channel=vid, event=_SSE_EVENT_CLOSE, data={})
+    sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
     return chapters, has_exception
 
 
@@ -254,9 +250,13 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
                 seconds=seconds,
                 chapter=chapter,
             )
+
             chapters.append(data)
-            sse_publish(channel=vid, event=_SSE_EVENT_CHAPTER,
-                        data=asdict(data))
+            sse_publish(
+                channel=vid,
+                event=SseEvent.CHAPTER,
+                data=asdict(data),
+            )
 
         # Looks like it's the end.
         # if type(end_at) is not int:  # NoneType.
@@ -353,6 +353,6 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
     chapter.summary = summary.strip()
     sse_publish(
         channel=chapter.vid,
-        event=_SSE_EVENT_CHAPTER,
+        event=SseEvent.CHAPTER,
         data=asdict(chapter),
     )
