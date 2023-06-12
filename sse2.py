@@ -1,8 +1,8 @@
 import json
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from enum import unique
-from typing import Optional
+from typing import Any
 
 from strenum import StrEnum
 
@@ -20,8 +20,8 @@ class SseEvent(StrEnum):
 
 @dataclass
 class Message:
-    event: str = ''
-    data: dict or list[dict] = {}
+    event: str = ''  # required.
+    data: dict or list[dict] = field(default_factory=dict or list[dict])  # nopep8; required.
 
     def __str__(self) -> str:
         data_str = json.dumps(self.data)
