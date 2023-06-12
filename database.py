@@ -15,8 +15,8 @@ class Chapter:
 
 
 _TABLE = 'chapter'
-_COLUMN_VID = 'vid'
 _COLUMN_CID = 'cid'
+_COLUMN_VID = 'vid'
 _COLUMN_TIMESTAMP = 'timestamp'  # HH:mm:ss
 _COLUMN_SECONDS = 'seconds'
 _COLUMN_CHAPTER = 'chapter'
@@ -49,4 +49,33 @@ def create_chapter_table():
     commit(f'''
         CREATE INDEX IF NOT EXISTS idx_{_COLUMN_UPDATE_TIMESTAMP}
         ON {_TABLE} ({_COLUMN_UPDATE_TIMESTAMP})
+        ''')
+
+
+def insert_chapters(chapters: list[Chapter]):
+    for c in chapters:
+        _insert_chapter(c)
+
+
+def _insert_chapter(chapter: Chapter):
+    commit(f'''
+        INSERT INTO {_TABLE} (
+            {_COLUMN_CID},
+            {_COLUMN_VID},
+            {_COLUMN_TIMESTAMP},
+            {_COLUMN_SECONDS},
+            {_COLUMN_CHAPTER},
+            {_COLUMN_SUMMARY},
+            {_COLUMN_CREATE_TIMESTAMP},
+            {_COLUMN_UPDATE_TIMESTAMP}
+        ) VALUES (
+            '{sqlescape(chapter.cid)}',
+            '{sqlescape(chapter.vid)}',
+            '{sqlescape(chapter.timestamp)}',
+             {chapter.seconds},
+            '{sqlescape(chapter.chapter)}',
+            '{sqlescape(chapter.summary)}',
+             STRFTIME('%s', 'NOW'),
+             STRFTIME('%s', 'NOW')
+        )
         ''')
