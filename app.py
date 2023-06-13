@@ -7,6 +7,7 @@ from arq.typing import WorkerSettingsBase
 from quart import Quart, abort, g, json, request, make_response
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
+from youtube_transcript_api import NoTranscriptFound
 
 from constants import APPLICATION_JSON
 from database import Chapter, Slicer, \
@@ -17,11 +18,14 @@ from database import Chapter, Slicer, \
 from logger import logger
 from rds import rds
 from sse import SseEvent, sse_publish, sse_subscribe
-from summary import summarize as summarizing
+from summary import TimedText, \
+    parse_timed_texts_and_lang, \
+    summarize as summarizing
 
 
 @unique
 class State(StrEnum):
+    NOTHING = 'nothing'
     DOING = 'doing'
     DONE = 'done'
 
@@ -114,7 +118,18 @@ async def summarize():
         return _build_summarize_response([], State.DOING)
     rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
 
-    await app.arq.enqueue_job('do_summarize_job', vid, chapters)
+    try:
+        # FIXME (Matthew Lee) youtube rate limit?
+        timed_texts, lang = parse_timed_texts_and_lang(vid)
+    except NoTranscriptFound:
+        rds.delete(rds_key)
+        logger.warning(f'summarize, but no transcript found, vid={vid}')
+        return _build_summarize_response([], State.NOTHING)
+    except Exception:
+        rds.delete(rds_key)
+        raise  # to errorhandler.
+
+    await app.arq.enqueue_job('do_summarize_job', vid, chapters, timed_texts, lang)
     return _build_summarize_response(chapters, State.DOING)
 
 
@@ -157,13 +172,25 @@ async def do_on_arq_worker_shutdown(ctx: dict):
 
 
 # ctx is arq first param, keep it.
-async def do_summarize_job(ctx: dict, vid: str, chapters: list[dict]):
+async def do_summarize_job(
+    ctx: dict,
+    vid: str,
+    chapters: list[dict],
+    timed_texts: list[TimedText],
+    lang: str,
+):
     logger.info(f'do summarize job, vid={vid}')
 
     rds_key = _build_summarize_rds_key(vid)
     rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
 
-    chapters, has_exception = await summarizing(vid, chapters)
+    chapters, has_exception = await summarizing(
+        vid=vid,
+        chapters=chapters,
+        timed_texts=timed_texts,
+        lang=lang,
+    )
+
     if not has_exception:
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)

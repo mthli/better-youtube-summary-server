@@ -103,8 +103,34 @@ If the existing bullet list summary is too long, you can summarize it again, kee
 '''
 
 
-async def summarize(vid: str, chapters: list[dict] = []) -> tuple[list[Chapter], bool]:
-    timed_texts, lang = _parse_timed_texts_and_lang(vid)
+# NoTranscriptFound
+def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
+    timed_texts: list[TimedText] = []
+
+    # https://en.wikipedia.org/wiki/Languages_used_on_the_Internet#Content_languages_on_YouTube
+    transcript_list = YouTubeTranscriptApi.list_transcripts(vid)
+    transcript = transcript_list.find_transcript(['en', 'es', 'pt', 'hi', 'ko', 'zh'])  # nopep8.
+
+    lang = transcript.language_code
+    array: list[dict] = transcript.fetch()
+
+    for d in array:
+        timed_texts.append(TimedText(
+            start=d['start'],
+            duration=d['duration'],
+            lang=lang,
+            text=d['text'],
+        ))
+
+    return timed_texts, lang
+
+
+async def summarize(
+    vid: str,
+    chapters: list[dict],
+    timed_texts: list[TimedText],
+    lang: str,
+) -> tuple[list[Chapter], bool]:
     logger.info(f'summarize, vid={vid}, lang={lang}')
 
     chapters: list[Chapter] = _parse_chapters(vid, chapters, lang)
@@ -137,28 +163,6 @@ async def summarize(vid: str, chapters: list[dict] = []) -> tuple[list[Chapter],
 
     await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
     return chapters, has_exception
-
-
-# FIXME (Matthew Lee) youtube rate limit?
-def _parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
-    timed_texts: list[TimedText] = []
-
-    # https://en.wikipedia.org/wiki/Languages_used_on_the_Internet#Content_languages_on_YouTube
-    transcript_list = YouTubeTranscriptApi.list_transcripts(vid)
-    transcript = transcript_list.find_transcript(['en', 'es', 'pt', 'hi', 'ko', 'zh'])  # nopep8.
-
-    lang = transcript.language_code
-    array: list[dict] = transcript.fetch()
-
-    for d in array:
-        timed_texts.append(TimedText(
-            start=d['start'],
-            duration=d['duration'],
-            lang=lang,
-            text=d['text'],
-        ))
-
-    return timed_texts, lang
 
 
 def _parse_chapters(vid: str, chapters: list[dict], lang: str) -> list[Chapter]:
