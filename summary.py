@@ -42,12 +42,13 @@ for example `[0] [10] [How are you]`.
 
 Your job is trying to detect the content chapter from top to bottom,
 the chapter should contains as many sentences as possible from top to bottom,
-and you can take the first obvious context as the chapter.
+and you should take the first obvious context as the chapter.
 
 Return a JSON object containing the following fields:
-- "end_at": int field, the chapter end at which sentence [index], must <= {end_at_limit}.
+- "end_at": int field, the chapter context end at which sentence [index].
 - "chapter": string field, the concise title of chapter in a few words.
 - "seconds": int field, the [start time] of the chapter in seconds, must >= {start_time}.
+- "timestamp": string field, the [start time] of the chapter in "HH:mm:ss" format.
 
 Do not output any redundant explanation or information other than JSON.
 
@@ -221,7 +222,6 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
             prompt = _DETECT_CHAPTERS_PROMPT.format(
                 content=temp,
                 start_time=start_time,
-                end_at_limit=timed_texts_start,
             )
 
             message = build_message(Role.USER, prompt)
@@ -239,7 +239,6 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
         prompt = _DETECT_CHAPTERS_PROMPT.format(
             content=content,
             start_time=start_time,
-            end_at_limit=timed_texts_start,
         )
 
         message = build_message(Role.USER, prompt)
@@ -281,6 +280,10 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
             logger.warning(f'detect chapters, avoid infinite loop, vid={vid}')
             latest_end_at += 5  # force a different context.
             timed_texts_start = latest_end_at
+        elif end_at > timed_texts_start:
+            logger.warning(f'detect chapters, avoid drain early, vid={vid}')
+            latest_end_at = timed_texts_start
+            timed_texts_start = end_at + 1
         else:
             latest_end_at = end_at
             timed_texts_start = end_at + 1
@@ -355,12 +358,6 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
         message = build_message(Role.USER, prompt)
         body = await chat(messages=[message], top_p=0.1, timeout=90)
         summary = get_content(body).strip()
-
-        # logger.info(f'summarize chapter, '
-        #             f'vid={chapter.vid}, '
-        #             f'chapter={chapter.chapter}, '
-        #             f'is_first_summarize={is_first_summarize}, '
-        #             f'summary=\n{summary}')
 
         chapter.summary = summary  # cache even not finished.
         is_first_summarize = False
