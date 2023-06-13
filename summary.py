@@ -31,8 +31,8 @@ _DETECT_CHAPTERS_PROMPT = '''
 Given the following content, trying to detect its chapter.
 The content is taken from a video, possibly a conversation without role markers.
 
-The content consists of many sentences,
-the sentence format is `[index] [start time in seconds] [text...]`,
+The content consists of many lines,
+the line format is `[index] [start time in seconds] [text...]`,
 for example `[0] [10] [How are you]`.
 
 > Content:
@@ -40,12 +40,12 @@ for example `[0] [10] [How are you]`.
 {content}
 >>>
 
-Your job is trying to detect the content chapter from top to bottom,
-the chapter should contains as many sentences as possible from top to bottom,
-and you should take the first obvious context as the chapter.
+Your job is trying to detect the content chapter,
+the chapter context should summarize most of lines,
+and ignore irrelevant parts.
 
 Return a JSON object containing the following fields:
-- "end_at": int field, the chapter context end at which sentence [index].
+- "end_at": int field, the chapter context end at which line [index].
 - "chapter": string field, the concise title of chapter in a few words.
 - "seconds": int field, the [start time] of the chapter in seconds, must >= {start_time}.
 - "timestamp": string field, the [start time] of the chapter in "HH:mm:ss" format.
@@ -283,7 +283,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
         elif end_at > timed_texts_start:
             logger.warning(f'detect chapters, avoid drain early, vid={vid}')
             latest_end_at = timed_texts_start
-            timed_texts_start = end_at + 1
+            timed_texts_start = latest_end_at + 1
         else:
             latest_end_at = end_at
             timed_texts_start = end_at + 1
@@ -315,17 +315,17 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
         content_has_changed = False
 
         for t in texts:
-            temp = content + '\n' + t.text if content else t.text
+            lines = content + '\n' + t.text if content else t.text
             if is_first_summarize:
                 prompt = _SUMMARIZE_FIRST_CHAPTER_PROMPT.format(
                     chapter=chapter.chapter,
-                    content=temp,
+                    content=lines,
                 )
             else:
                 prompt = _SUMMARIZE_NEXT_CHAPTER_PROMPT.format(
                     chapter=chapter.chapter,
                     summary=summary,
-                    content=temp,
+                    content=lines,
                 )
 
             message = build_message(Role.USER, prompt)
@@ -333,7 +333,7 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
                 if is_first_summarize else _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT
             if count_tokens([message]) < token_limit:
                 content_has_changed = True
-                content = temp.strip()
+                content = lines.strip()
                 summary_start += 1
             else:
                 break  # for.
