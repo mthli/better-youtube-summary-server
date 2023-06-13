@@ -131,7 +131,12 @@ async def summarize(
     timed_texts: list[TimedText],
     lang: str,
 ) -> tuple[list[Chapter], bool]:
-    logger.info(f'summarize, vid={vid}, lang={lang}')
+    logger.info(
+        f'summarize, '
+        f'vid={vid}, '
+        f'len(chapters)={len(chapters)}, '
+        f'len(timed_texts)={len(timed_texts)}, '
+        f'lang={lang}')
 
     chapters: list[Chapter] = _parse_chapters(vid, chapters, lang)
     if not chapters:

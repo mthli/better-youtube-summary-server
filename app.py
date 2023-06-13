@@ -4,7 +4,7 @@ from enum import unique
 from arq import create_pool
 from arq.connections import RedisSettings
 from arq.typing import WorkerSettingsBase
-from quart import Quart, abort, g, json, request, make_response
+from quart import Quart, abort, json, request, make_response
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 from youtube_transcript_api import NoTranscriptFound
@@ -121,6 +121,10 @@ async def summarize():
     try:
         # FIXME (Matthew Lee) youtube rate limit?
         timed_texts, lang = parse_timed_texts_and_lang(vid)
+        if not timed_texts:
+            rds.delete(rds_key)
+            logger.warning(f'summarize, but no transcript found, vid={vid}')
+            return _build_summarize_response([], State.NOTHING)
     except NoTranscriptFound:
         rds.delete(rds_key)
         logger.warning(f'summarize, but no transcript found, vid={vid}')
@@ -191,7 +195,7 @@ async def do_summarize_job(
         lang=lang,
     )
 
-    if not has_exception:
+    if chapters and (not has_exception):
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
         insert_chapters(chapters)
