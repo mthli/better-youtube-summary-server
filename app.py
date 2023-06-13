@@ -26,6 +26,8 @@ class State(StrEnum):
     DONE = 'done'
 
 
+_SUMMARIZE_KEY_EX = 300  # 5 mins.
+
 app = Quart(__name__)
 create_chapter_table()
 
@@ -105,9 +107,9 @@ async def summarize():
     rds_key = _build_summarize_rds_key(vid)
     if rds.exists(rds_key):
         logger.info(f'summarize, but repeated, vid={vid}')
-        rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
+        rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
         return _build_summarize_response([], State.DOING)
-    rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
+    rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
 
     await app.arq.enqueue_job('do_summarize_job', vid, timedtext, chapters)
     return _build_summarize_response(chapters, State.DOING)
@@ -164,14 +166,17 @@ async def do_on_arq_worker_shutdown(ctx: dict):
 # ctx is arq first param, keep it.
 async def do_summarize_job(ctx: dict, vid: str, timedtext: str, chapters: list[dict]):
     logger.info(f'do summarize job, vid={vid}')
-    chapters, has_exception = await summarizing(vid, timedtext, chapters)
 
+    rds_key = _build_summarize_rds_key(vid)
+    rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
+
+    chapters, has_exception = await summarizing(vid, timedtext, chapters)
     if not has_exception:
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
         insert_chapters(chapters)
 
-    rds.delete(_build_summarize_rds_key(vid))
+    rds.delete(rds)
 
 
 def _build_summarize_rds_key(vid: str) -> str:
