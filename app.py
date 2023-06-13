@@ -164,7 +164,7 @@ async def do_summarize_job(ctx: dict, vid: str, chapters: list[dict]):
         delete_chapters_by_vid(vid)
         insert_chapters(chapters)
 
-    rds.delete(rds)
+    rds.delete(rds_key)
 
 
 def _build_summarize_rds_key(vid: str) -> str:
