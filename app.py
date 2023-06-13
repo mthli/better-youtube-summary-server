@@ -89,7 +89,7 @@ async def sse():
 @app.post('/api/summarize')
 async def summarize():
     try:
-        body: dict = (await request.form).to_dict()
+        body: dict = await request.get_json()
     except Exception as e:
         abort(400, f'summarize failed, e={e}')
 

@@ -5,7 +5,6 @@ from dataclasses import dataclass, asdict
 from sys import maxsize
 from uuid import uuid4
 
-from bs4 import BeautifulSoup
 from quart import abort
 from youtube_transcript_api import YouTubeTranscriptApi
 
