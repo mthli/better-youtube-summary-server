@@ -8,7 +8,7 @@ from uuid import uuid4
 from quart import abort
 from youtube_transcript_api import YouTubeTranscriptApi
 
-from database import Chapter
+from database import Chapter, Slicer
 from logger import logger
 from openai import Role, TokenLimit, \
     build_message, \
@@ -183,8 +183,9 @@ def _parse_chapters(vid: str, chapters: list[dict], lang: str) -> list[Chapter]:
                 cid=str(uuid4()),
                 vid=vid,
                 seconds=seconds,
-                chapter=c['title'],
+                slicer=Slicer.YOUTUBE.value,
                 lang=lang,
+                chapter=c['title'],
             ))
     except Exception:
         logger.exception(f'parse chapters failed, vid={vid}')
@@ -255,8 +256,9 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
                 cid=str(uuid4()),
                 vid=vid,
                 seconds=seconds,
-                chapter=chapter,
+                slicer=Slicer.OPENAI.value,
                 lang=lang,
+                chapter=chapter,
             )
 
             chapters.append(data)

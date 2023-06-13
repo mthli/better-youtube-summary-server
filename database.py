@@ -1,22 +1,32 @@
 from dataclasses import dataclass
+from enum import unique
 
 from sqlite import commit, fetchall, sqlescape
+from strenum import StrEnum
 
 
 @dataclass
 class Chapter:
-    cid: str = ''        # required.
-    vid: str = ''        # required.
-    seconds: int = 0     # required.
-    lang: str = ''       # required; language code, empty means unknown.
-    chapter: str = ''    # required.
-    summary: str = ''    # optional.
+    cid: str = ''      # required.
+    vid: str = ''      # required.
+    seconds: int = 0   # required.
+    slicer: str = ''   # required.
+    lang: str = ''     # required; language code, empty means unknown.
+    chapter: str = ''  # required.
+    summary: str = ''  # optional.
+
+
+@unique
+class Slicer(StrEnum):
+    YOUTUBE = 'youtube'
+    OPENAI = 'openai'
 
 
 _TABLE = 'chapter'
 _COLUMN_CID = 'cid'
 _COLUMN_VID = 'vid'
 _COLUMN_SECONDS = 'seconds'
+_COLUMN_SLICER = 'slicer'
 _COLUMN_LANG = 'lang'  # language code.
 _COLUMN_CHAPTER = 'chapter'
 _COLUMN_SUMMARY = 'summary'
@@ -30,6 +40,7 @@ def create_chapter_table():
             {_COLUMN_CID}      TEXT NOT NULL PRIMARY KEY,
             {_COLUMN_VID}      TEXT NOT NULL DEFAULT '',
             {_COLUMN_SECONDS}  INTEGER NOT NULL DEFAULT 0,
+            {_COLUMN_SLICER}   TEXT NOT NULL DEFAULT '',
             {_COLUMN_LANG}     TEXT NOT NULL DEFAULT '',
             {_COLUMN_CHAPTER}  TEXT NOT NULL DEFAULT '',
             {_COLUMN_SUMMARY}  TEXT NOT NULL DEFAULT '',
@@ -57,6 +68,7 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
               {_COLUMN_CID},
               {_COLUMN_VID},
               {_COLUMN_SECONDS},
+              {_COLUMN_SLICER},
               {_COLUMN_LANG},
               {_COLUMN_CHAPTER},
               {_COLUMN_SUMMARY}
@@ -68,9 +80,10 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
         cid=r[0],
         vid=r[1],
         seconds=r[2],
-        lang=r[3],
-        chapter=r[4],
-        summary=r[5],
+        slicer=r[3],
+        lang=r[4],
+        chapter=r[5],
+        summary=r[6],
     ), res))
 
 
@@ -85,6 +98,7 @@ def _insert_chapter(chapter: Chapter):
             {_COLUMN_CID},
             {_COLUMN_VID},
             {_COLUMN_SECONDS},
+            {_COLUMN_SLICER},
             {_COLUMN_LANG},
             {_COLUMN_CHAPTER},
             {_COLUMN_SUMMARY},
@@ -94,6 +108,7 @@ def _insert_chapter(chapter: Chapter):
             '{sqlescape(chapter.cid)}',
             '{sqlescape(chapter.vid)}',
              {chapter.seconds},
+            '{sqlescape(chapter.slicer)}',
             '{sqlescape(chapter.lang)}',
             '{sqlescape(chapter.chapter)}',
             '{sqlescape(chapter.summary)}',
