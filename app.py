@@ -1,7 +1,9 @@
 from dataclasses import asdict
 from enum import unique
 
-from quart import Quart, abort, json, request, make_response
+from arq import create_pool
+from arq.connections import RedisSettings
+from quart import Quart, abort, g, json, request, make_response
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 
@@ -19,12 +21,20 @@ from summary import summarize as summarizing
 
 @unique
 class State(StrEnum):
-    PROCESSING = 'processing'
-    FINISHED = 'finished'
+    DOING = 'doing'
+    DONE = 'done'
 
 
 app = Quart(__name__)
 create_chapter_table()
+
+
+# https://pgjones.gitlab.io/quart/how_to_guides/startup_shutdown.html
+@app.before_serving
+async def before_serving():
+    if 'arq' not in g:
+        logger.info(f'create arq in g before serving')
+        g.arq = await create_pool(RedisSettings())
 
 
 # https://flask.palletsprojects.com/en/2.2.x/errorhandling/#generic-exception-handler
@@ -52,10 +62,8 @@ async def sse():
     found = find_chapters_by_vid(vid)
     if found:
         logger.info(f'sse, found chapters in database, vid={vid}')
-        data = list(map(lambda c: asdict(c), found))
-        await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
-        await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
-        return _build_summarize_response(found, State.FINISHED)
+        await _do_if_found_chapters_in_database(vid, found)
+        return _build_summarize_response(found, State.DONE)
 
     # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
     res = await make_response(
@@ -91,24 +99,18 @@ async def summarize():
     found = find_chapters_by_vid(vid)
     if found:
         logger.info(f'summarize, found chapters in database, vid={vid}')
-        return _build_summarize_response(found, State.FINISHED)
+        await _do_if_found_chapters_in_database(vid, found)
+        return _build_summarize_response(found, State.DONE)
 
-    rds_key = f'summarize_{vid}'
+    rds_key = _build_summarize_rds_key(vid)
     if rds.exists(rds_key):
         logger.info(f'summarize, but repeated, vid={vid}')
         rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
-        return _build_summarize_response([], State.PROCESSING)
+        return _build_summarize_response([], State.DOING)
     rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
 
-    chapters, has_exception = await summarizing(vid, timedtext, chapters)
-
-    if not has_exception:
-        logger.info(f'summarize, save chapters to database, vid={vid}')
-        delete_chapters_by_vid(vid)
-        insert_chapters(chapters)
-
-    rds.delete(rds_key)
-    return _build_summarize_response(chapters, State.FINISHED)
+    await g.arq.enqueue_job('build_summarize_job', vid, timedtext, chapters)
+    return _build_summarize_response(chapters, State.DOING)
 
 
 def _parse_vid_from_body(body: dict) -> str:
@@ -149,9 +151,32 @@ def _parse_chapters_from_body(body: dict) -> list[dict]:
 #     return language if language else 'en'
 
 
+# ctx is arq first param, keep it.
+async def build_summarize_job(ctx: dict, vid: str, timedtext: str, chapters: list[dict]):
+    chapters, has_exception = await summarizing(vid, timedtext, chapters)
+
+    if not has_exception:
+        logger.info(f'summarize, save chapters to database, vid={vid}')
+        delete_chapters_by_vid(vid)
+        insert_chapters(chapters)
+
+    rds.delete(_build_summarize_rds_key(vid))
+
+
+def _build_summarize_rds_key(vid: str) -> str:
+    return f'summarize_{vid}'
+
+
 def _build_summarize_response(chapters: list[Chapter], state: State) -> dict:
     chapters = list(map(lambda c: asdict(c), chapters))
     return {
         'chapters': chapters,
         'state': state.value,
     }
+
+
+async def _do_if_found_chapters_in_database(vid: str, found: list[Chapter]):
+    rds.delete(_build_summarize_rds_key(vid))
+    data = list(map(lambda c: asdict(c), found))
+    await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
+    await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
