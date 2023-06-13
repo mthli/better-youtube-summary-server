@@ -17,6 +17,7 @@ lxml = "*"
 quart = "*"
 hypercorn = "*"
 arq = "*"
+youtube-transcript-api = "*"
 
 [dev-packages]
 autopep8 = "*"
