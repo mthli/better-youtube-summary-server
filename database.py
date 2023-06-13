@@ -9,6 +9,7 @@ class Chapter:
     vid: str = ''        # required.
     timestamp: str = ''  # required.
     seconds: int = 0     # required.
+    lang: str = ''       # required; language code, empty means unknown.
     chapter: str = ''    # required.
     summary: str = ''    # optional.
 
@@ -18,6 +19,7 @@ _COLUMN_CID = 'cid'
 _COLUMN_VID = 'vid'
 _COLUMN_TIMESTAMP = 'timestamp'  # HH:mm:ss
 _COLUMN_SECONDS = 'seconds'
+_COLUMN_LANG = 'lang'  # language code.
 _COLUMN_CHAPTER = 'chapter'
 _COLUMN_SUMMARY = 'summary'
 _COLUMN_CREATE_TIMESTAMP = 'create_timestamp'
@@ -31,6 +33,7 @@ def create_chapter_table():
             {_COLUMN_VID}       TEXT NOT NULL DEFAULT '',
             {_COLUMN_TIMESTAMP} TEXT NOT NULL DEFAULT '',
             {_COLUMN_SECONDS}   INTEGER NOT NULL DEFAULT 0,
+            {_COLUMN_LANG}      TEXT NOT NULL DEFAULT '',
             {_COLUMN_CHAPTER}   TEXT NOT NULL DEFAULT '',
             {_COLUMN_SUMMARY}   TEXT NOT NULL DEFAULT '',
             {_COLUMN_CREATE_TIMESTAMP} INTEGER NOT NULL DEFAULT 0,
@@ -58,6 +61,7 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
               {_COLUMN_VID},
               {_COLUMN_TIMESTAMP},
               {_COLUMN_SECONDS},
+              {_COLUMN_LANG},
               {_COLUMN_CHAPTER},
               {_COLUMN_SUMMARY}
          FROM {_TABLE}
@@ -69,8 +73,9 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
         vid=r[1],
         timestamp=r[2],
         seconds=r[3],
-        chapter=r[4],
-        summary=r[5],
+        lang=r[4],
+        chapter=r[5],
+        summary=r[6],
     ), res))
 
 
@@ -86,6 +91,7 @@ def _insert_chapter(chapter: Chapter):
             {_COLUMN_VID},
             {_COLUMN_TIMESTAMP},
             {_COLUMN_SECONDS},
+            {_COLUMN_LANG},
             {_COLUMN_CHAPTER},
             {_COLUMN_SUMMARY},
             {_COLUMN_CREATE_TIMESTAMP},
@@ -95,6 +101,7 @@ def _insert_chapter(chapter: Chapter):
             '{sqlescape(chapter.vid)}',
             '{sqlescape(chapter.timestamp)}',
              {chapter.seconds},
+            '{sqlescape(chapter.lang)}',
             '{sqlescape(chapter.chapter)}',
             '{sqlescape(chapter.summary)}',
              STRFTIME('%s', 'NOW'),

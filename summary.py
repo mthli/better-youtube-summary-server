@@ -103,12 +103,13 @@ If the existing bullet list summary is too long, you can summarize it again, kee
 '''
 
 
-async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tuple[list[Chapter], bool]:
-    timed_texts = _parse_timed_texts(vid)
+async def summarize(vid: str, chapters: list[dict] = []) -> tuple[list[Chapter], bool]:
+    timed_texts, lang = _parse_timed_texts_and_lang(vid)
+    logger.info(f'summarize, vid={vid}, lang={lang}')
 
-    chapters: list[Chapter] = _parse_chapters(vid, chapters)
+    chapters: list[Chapter] = _parse_chapters(vid, chapters, lang)
     if not chapters:
-        chapters = await _detect_chapters(vid, timed_texts)
+        chapters = await _detect_chapters(vid, timed_texts, lang)
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
@@ -139,26 +140,28 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tupl
 
 
 # FIXME (Matthew Lee) youtube rate limit?
-def _parse_timed_texts(vid: str) -> list[TimedText]:
+def _parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
     timed_texts: list[TimedText] = []
 
     # https://en.wikipedia.org/wiki/Languages_used_on_the_Internet#Content_languages_on_YouTube
     transcript_list = YouTubeTranscriptApi.list_transcripts(vid)
     transcript = transcript_list.find_transcript(['en', 'es', 'pt', 'hi', 'ko', 'zh'])  # nopep8.
+
+    lang = transcript.language_code
     array: list[dict] = transcript.fetch()
 
     for d in array:
         timed_texts.append(TimedText(
             start=d['start'],
             duration=d['duration'],
-            lang=transcript.language_code,
+            lang=lang,
             text=d['text'],
         ))
 
-    return timed_texts
+    return timed_texts, lang
 
 
-def _parse_chapters(vid: str, chapters: list[dict]) -> list[Chapter]:
+def _parse_chapters(vid: str, chapters: list[dict], lang: str) -> list[Chapter]:
     res: list[Chapter] = []
 
     if not chapters:
@@ -182,6 +185,7 @@ def _parse_chapters(vid: str, chapters: list[dict]) -> list[Chapter]:
                 timestamp=timestamp,
                 seconds=seconds,
                 chapter=c['title'],
+                lang=lang,
             ))
     except Exception:
         logger.exception(f'parse chapters failed, vid={vid}')
@@ -190,7 +194,7 @@ def _parse_chapters(vid: str, chapters: list[dict]) -> list[Chapter]:
     return res
 
 
-async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapter]:
+async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) -> list[Chapter]:
     chapters: list[Chapter] = []
     timed_texts_start = 0
     latest_end_at = -1
@@ -245,6 +249,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText]) -> list[Chapt
                 timestamp=timestamp,
                 seconds=seconds,
                 chapter=chapter,
+                lang=lang,
             )
 
             chapters.append(data)
@@ -337,11 +342,11 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
         body = await chat(messages=[message], top_p=0.1, timeout=90)
         summary = get_content(body).strip()
 
-        logger.info(f'summarize chapter, '
-                    f'vid={chapter.vid}, '
-                    f'chapter={chapter}, '
-                    f'is_first_summarize={is_first_summarize}, '
-                    f'summary=\n{summary}')
+        # logger.info(f'summarize chapter, '
+        #             f'vid={chapter.vid}, '
+        #             f'chapter={chapter.chapter}, '
+        #             f'is_first_summarize={is_first_summarize}, '
+        #             f'summary=\n{summary}')
 
         chapter.summary = summary  # cache even not finished.
         is_first_summarize = False
