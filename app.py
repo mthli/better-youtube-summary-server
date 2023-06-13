@@ -3,6 +3,7 @@ from enum import unique
 
 from arq import create_pool
 from arq.connections import RedisSettings
+from arq.typing import WorkerSettingsBase
 from quart import Quart, abort, g, json, request, make_response
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
@@ -109,7 +110,7 @@ async def summarize():
         return _build_summarize_response([], State.DOING)
     rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
 
-    await g.arq.enqueue_job('build_summarize_job', vid, timedtext, chapters)
+    await g.arq.enqueue_job('do_summarize_job', vid, timedtext, chapters)
     return _build_summarize_response(chapters, State.DOING)
 
 
@@ -152,7 +153,18 @@ def _parse_chapters_from_body(body: dict) -> list[dict]:
 
 
 # ctx is arq first param, keep it.
-async def build_summarize_job(ctx: dict, vid: str, timedtext: str, chapters: list[dict]):
+async def do_on_arq_worker_startup(ctx: dict):
+    logger.info(f'arq worker startup')
+
+
+# ctx is arq first param, keep it.
+async def do_on_arq_worker_shutdown(ctx: dict):
+    logger.info(f'arq worker shutdown')
+
+
+# ctx is arq first param, keep it.
+async def do_summarize_job(ctx: dict, vid: str, timedtext: str, chapters: list[dict]):
+    logger.info(f'do summarize job, vid={vid}')
     chapters, has_exception = await summarizing(vid, timedtext, chapters)
 
     if not has_exception:
@@ -180,3 +192,10 @@ async def _do_if_found_chapters_in_database(vid: str, found: list[Chapter]):
     data = list(map(lambda c: asdict(c), found))
     await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
     await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
+
+
+# https://arq-docs.helpmanual.io/#simple-usage
+class WorkerSettings(WorkerSettingsBase):
+    functions = [do_summarize_job]
+    on_startup = do_on_arq_worker_startup
+    on_shutdown = do_on_arq_worker_shutdown
