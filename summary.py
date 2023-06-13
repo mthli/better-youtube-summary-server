@@ -21,9 +21,10 @@ from sse import SseEvent, sse_publish
 
 @dataclass
 class TimedText:
-    start: float = 0  # required; in seconds.
-    dur: float = 0    # required; in seconds.
-    text: str = ''    # required.
+    start: float = 0     # required; in seconds.
+    duration: float = 0  # required; in seconds.
+    lang: str = 'en'     # required; language code.
+    text: str = ''       # required.
 
 
 _DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value - 160  # nopep8, 3936.
@@ -138,10 +139,22 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tupl
     return chapters, has_exception
 
 
+# FIXME (Matthew Lee) youtube rate limit?
 def _parse_timed_texts(vid: str) -> list[TimedText]:
     timed_texts: list[TimedText] = []
 
-    # TODO
+    # https://en.wikipedia.org/wiki/Languages_used_on_the_Internet#Content_languages_on_YouTube
+    transcript_list = YouTubeTranscriptApi.list_transcripts(vid)
+    transcript = transcript_list.find_transcript(['en', 'es', 'pt', 'hi', 'ko', 'zh'])  # nopep8.
+    array: list[dict] = transcript.fetch()
+
+    for d in array:
+        timed_texts.append(TimedText(
+            start=d['start'],
+            duration=d['duration'],
+            lang=transcript.language_code,
+            text=d['text'],
+        ))
 
     return timed_texts
 
