@@ -1,8 +1,17 @@
 {
   "apps": [
     {
-      "name": "better-youtube-summary-server",
+      "name": "better-youtube-summary-app",
       "script": "python3 -m pipenv run hypercorn app:app",
+      "exec_mode": "fork",
+      "kill_timeout": 5000,
+      "listen_timeout": 10000,
+      "max_memory_restart": "512M",
+      "watch": false
+    },
+    {
+      "name": "better-youtube-summary-arq",
+      "script": "python3 -m pipenv run arq app.WorkerSettings",
       "exec_mode": "fork",
       "kill_timeout": 5000,
       "listen_timeout": 10000,
