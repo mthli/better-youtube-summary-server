@@ -41,12 +41,12 @@ for example `[0] [10] [How are you]`.
 >>>
 
 Your job is trying to detect the content chapter,
-the chapter context should summarize most of lines,
+the chapter context should summarize most of lines from top to bottom,
 and ignore irrelevant parts.
 
 Return a JSON object containing the following fields:
 - "end_at": int field, the chapter context end at which line [index].
-- "chapter": string field, the concise title of chapter in a few words.
+- "chapter": string field, a brief title of the chapter.
 - "seconds": int field, the [start time] of the chapter in seconds, must >= {start_time}.
 - "timestamp": string field, the [start time] of the chapter in "HH:mm:ss" format.
 
@@ -58,14 +58,10 @@ Do not output any redundant explanation or information other than JSON.
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value * 7 / 8  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_PROMPT = '''
-List the most important points of the following content.
+List the most important points of the following content according to the topic of "{chapter}".
+The content is taken from a video, possibly a conversation without role markers.
 
-The content is taken from a video,
-possibly a conversation without role markers,
-and its topic is about "{chapter}".
-
-If a context is not important or doesn't make sense, don't include it to the output.
-Do not output redundant points, keep the output concise.
+Do not output any redundant or irrelevant points, keep the output concise.
 Do not output any redundant explanation or information.
 
 > Content:
@@ -84,13 +80,11 @@ Your job is to produce a final bullet list summary.
 We have provided an existing bullet list summary up to a certain point.
 We have the opportunity to refine the existing summary (only if needed) with some more content below.
 
-The content is taken from a video,
-possibly a conversation without role markers,
-and its topic is about "{chapter}".
+The content is taken from a video, possibly a conversation without role markers, and its topic is about "{chapter}".
 
 Refine the existing bullet list summary (only if needed) with the given content.
 Do not refine the existing summary with the given content if it isn't useful or doesn't make sense.
-Do not output redundant points, keep the output concise.
+Do not output any redundant or irrelevant points, keep the output concise.
 Do not output any redundant explanation or information.
 
 If the existing bullet list summary is too long, you can summarize it again, keep the important points.
@@ -272,8 +266,9 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
                 data=asdict(data),
             )
 
-        # Looks like it's the end.
+        # Looks like it's the end and meanless, so ignore the chapter.
         # if type(end_at) is not int:  # NoneType.
+        #     logger.info(f'detect chapters, end_at is not int, vid={vid}')
         #     break  # drained.
 
         if end_at <= latest_end_at:
