@@ -33,9 +33,8 @@ create_chapter_table()
 # https://pgjones.gitlab.io/quart/how_to_guides/startup_shutdown.html
 @app.before_serving
 async def before_serving():
-    if 'arq' not in g:
-        logger.info(f'create arq in g before serving')
-        g.arq = await create_pool(RedisSettings())
+    logger.info(f'create arq in app before serving')
+    app.arq = await create_pool(RedisSettings())
 
 
 # https://flask.palletsprojects.com/en/2.2.x/errorhandling/#generic-exception-handler
@@ -110,7 +109,7 @@ async def summarize():
         return _build_summarize_response([], State.DOING)
     rds.set(rds_key, 1, ex=300)  # expires in 5 mins.
 
-    await g.arq.enqueue_job('do_summarize_job', vid, timedtext, chapters)
+    await app.arq.enqueue_job('do_summarize_job', vid, timedtext, chapters)
     return _build_summarize_response(chapters, State.DOING)
 
 
