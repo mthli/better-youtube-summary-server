@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from bs4 import BeautifulSoup
 from quart import abort
+from youtube_transcript_api import YouTubeTranscriptApi
 
 from database import Chapter
 from logger import logger
@@ -103,7 +104,7 @@ If the existing bullet list summary is too long, you can summarize it again, kee
 
 
 async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tuple[list[Chapter], bool]:
-    timed_texts = _parse_timed_texts(vid, timedtext)
+    timed_texts = _parse_timed_texts(vid)
 
     chapters: list[Chapter] = _parse_chapters(vid, chapters)
     if not chapters:
@@ -137,27 +138,10 @@ async def summarize(vid: str, timedtext: str, chapters: list[dict] = []) -> tupl
     return chapters, has_exception
 
 
-def _parse_timed_texts(vid: str, src: str) -> list[TimedText]:
+def _parse_timed_texts(vid: str) -> list[TimedText]:
     timed_texts: list[TimedText] = []
-    soup = BeautifulSoup(src, 'xml')
 
-    transcript_el = soup.find('transcript')
-    if not transcript_el:
-        abort(404, f'transcript not found, vid={vid}')
-
-    text_els = transcript_el.find_all('text')
-    if not text_els:
-        abort(404, f'transcript is empty, vid={vid}')
-
-    for text_el in text_els:
-        timed_texts.append(TimedText(
-            start=float(text_el.attrs['start']),
-            dur=float(text_el.attrs['dur']),
-            text=text_el.text,
-        ))
-
-    if not timed_texts:
-        abort(400, f'transcript format invalid, vid={vid}')
+    # TODO
 
     return timed_texts
 

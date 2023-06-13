@@ -6,7 +6,6 @@ from logger import logger
 from summary import summarize
 
 VID = 'Ff4fRgnuFgQ'
-FILE = './script/text_summary_timedtext.xml'
 CHAPTERS = [
     {
         "title": "Introduction",
@@ -88,10 +87,7 @@ CHAPTERS = [
 
 
 async def test_summary():
-    with open(FILE, 'r') as f:
-        file = f.read()
-
-    chapters, has_exception = await summarize(vid=VID, timedtext=file, chapters=CHAPTERS)
+    chapters, has_exception = await summarize(vid=VID, chapters=CHAPTERS)
     chapters = list(map(lambda c: asdict(c), chapters))
     dumps = json.dumps(chapters, ensure_ascii=False)
     logger.info(f'dumps={dumps}')

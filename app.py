@@ -84,7 +84,6 @@ async def sse():
 
 # {
 #   'vid':       str,  required.
-#   'timedtext': str,  required.
 #   'chapters':  dict, optional.
 # }
 @app.post('/api/summarize')
@@ -95,7 +94,6 @@ async def summarize():
         abort(400, f'summarize failed, e={e}')
 
     vid = _parse_vid_from_body(body)
-    timedtext = _parse_timedtext_from_body(body)
     chapters = _parse_chapters_from_body(body)
 
     found = find_chapters_by_vid(vid)
@@ -111,7 +109,7 @@ async def summarize():
         return _build_summarize_response([], State.DOING)
     rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
 
-    await app.arq.enqueue_job('do_summarize_job', vid, timedtext, chapters)
+    await app.arq.enqueue_job('do_summarize_job', vid, chapters)
     return _build_summarize_response(chapters, State.DOING)
 
 
@@ -123,16 +121,6 @@ def _parse_vid_from_body(body: dict) -> str:
     if not vid:
         abort(400, f'"vid" is empty')
     return vid
-
-
-def _parse_timedtext_from_body(body: dict) -> str:
-    timedtext = body.get('timedtext', '')
-    if not isinstance(timedtext, str):
-        abort(400, f'"timedtext" must be string')
-    timedtext = timedtext.strip()
-    if not timedtext:
-        abort(400, f'"timedtext" is empty')
-    return timedtext
 
 
 def _parse_chapters_from_body(body: dict) -> list[dict]:
@@ -164,13 +152,13 @@ async def do_on_arq_worker_shutdown(ctx: dict):
 
 
 # ctx is arq first param, keep it.
-async def do_summarize_job(ctx: dict, vid: str, timedtext: str, chapters: list[dict]):
+async def do_summarize_job(ctx: dict, vid: str, chapters: list[dict]):
     logger.info(f'do summarize job, vid={vid}')
 
     rds_key = _build_summarize_rds_key(vid)
     rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
 
-    chapters, has_exception = await summarizing(vid, timedtext, chapters)
+    chapters, has_exception = await summarizing(vid, chapters)
     if not has_exception:
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
