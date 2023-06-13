@@ -29,28 +29,27 @@ class TimedText:
 _DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value - 160  # nopep8, 3936.
 _DETECT_CHAPTERS_PROMPT = '''
 Given the following content, trying to detect its chapter.
-The content is taken from a video, possibly a conversation but without role markers.
+The content is taken from a video, possibly a conversation without role markers.
 
 The content consists of many sentences,
-the sentences format is `[index] [start time in seconds] [text...]`,
+the sentence format is `[index] [start time in seconds] [text...]`,
 for example `[0] [10] [How are you]`.
-
-Your job is trying to detect the content chapter from top to bottom,
-the chapter should contains as much sentences as possible from top to bottom,
-and you can take the first obvious context as the chapter.
-
-Return a JSON object containing the following fields:
-- "chapter": string field, the concise title of chapter in a few words.
-- "seconds": int field, the [start time] of the chapter in seconds, must >= {start_time}.
-- "timestamp": string field, the [start time] of the chapter in "HH:mm:ss" format.
-- "end_at": int field, the chapter context end at which [index].
-
-Do not output any redundant explanation or information other than JSON.
 
 > Content:
 >>>
 {content}
 >>>
+
+Your job is trying to detect the content chapter from top to bottom,
+the chapter should contains as many sentences as possible from top to bottom,
+and you can take the first obvious context as the chapter.
+
+Return a JSON object containing the following fields:
+- "end_at": int field, the chapter end at which sentence [index], must <= {end_at_limit}.
+- "chapter": string field, the concise title of chapter in a few words.
+- "seconds": int field, the [start time] of the chapter in seconds, must >= {start_time}.
+
+Do not output any redundant explanation or information other than JSON.
 
 > JSON:
 '''
@@ -59,13 +58,16 @@ Do not output any redundant explanation or information other than JSON.
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value * 7 / 8  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_PROMPT = '''
 List the most important points of the following content.
-The content is taken from a video, possibly a conversation but without role markers.
+
+The content is taken from a video,
+possibly a conversation without role markers,
+and its topic is about "{chapter}".
 
 If a context is not important or doesn't make sense, don't include it to the output.
 Do not output redundant points, keep the output concise.
 Do not output any redundant explanation or information.
 
-> Content, and the chapter is about "{chapter}":
+> Content:
 >>>
 {content}
 >>>
@@ -80,7 +82,10 @@ Your job is to produce a final bullet list summary.
 
 We have provided an existing bullet list summary up to a certain point.
 We have the opportunity to refine the existing summary (only if needed) with some more content below.
-The content are taken from a video, possibly a conversation but without role markers.
+
+The content is taken from a video,
+possibly a conversation without role markers,
+and its topic is about "{chapter}".
 
 Refine the existing bullet list summary (only if needed) with the given content.
 Do not refine the existing summary with the given content if it isn't useful or doesn't make sense.
@@ -89,12 +94,12 @@ Do not output any redundant explanation or information.
 
 If the existing bullet list summary is too long, you can summarize it again, keep the important points.
 
-> Existing bullet list summary, and the chapter is about "{chapter}":
+> Existing bullet list summary:
 >>>
 {summary}
 >>>
 
-> More content, and the chapter is about "{chapter}":
+> More content:
 >>>
 {content}
 >>>
@@ -182,7 +187,6 @@ def _parse_chapters(vid: str, chapters: list[dict], lang: str) -> list[Chapter]:
             res.append(Chapter(
                 cid=str(uuid4()),
                 vid=vid,
-                timestamp=timestamp,
                 seconds=seconds,
                 chapter=c['title'],
                 lang=lang,
@@ -202,6 +206,10 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
     while True:
         texts = timed_texts[timed_texts_start:]
         if not texts:
+            logger.info(f'detect chapters, drained, '
+                        f'vid={vid}, '
+                        f'len={len(timed_texts)}, '
+                        f'timed_texts_start={timed_texts_start}')
             break  # drained.
 
         content = ''
@@ -213,6 +221,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
             prompt = _DETECT_CHAPTERS_PROMPT.format(
                 content=temp,
                 start_time=start_time,
+                end_at_limit=timed_texts_start,
             )
 
             message = build_message(Role.USER, prompt)
@@ -222,9 +231,15 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
             else:
                 break  # for.
 
+        logger.info(f'detect chapters, '
+                    f'vid={vid}, '
+                    f'timed_texts_start={timed_texts_start}, '
+                    f'latest_end_at={latest_end_at}')
+
         prompt = _DETECT_CHAPTERS_PROMPT.format(
             content=content,
             start_time=start_time,
+            end_at_limit=timed_texts_start,
         )
 
         message = build_message(Role.USER, prompt)
@@ -233,20 +248,19 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
         logger.info(f'detect chapters, vid={vid}, content=\n{content}')
 
         res: dict = json.loads(content)
-        timestamp = res.get('timestamp', '').strip()
         chapter = res.get('chapter', '').strip()
         seconds = res.get('seconds', -1)
         end_at = res.get('end_at')
 
         # Looks like it's the end and meanless, so ignore the chapter.
         if type(end_at) is not int:  # NoneType.
+            logger.info(f'detect chapters, end_at is not int, vid={vid}')
             break  # drained.
 
-        if timestamp and chapter and seconds >= 0:
+        if chapter and seconds >= 0:
             data = Chapter(
                 cid=str(uuid4()),
                 vid=vid,
-                timestamp=timestamp,
                 seconds=seconds,
                 chapter=chapter,
                 lang=lang,

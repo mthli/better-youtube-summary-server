@@ -7,7 +7,6 @@ from sqlite import commit, fetchall, sqlescape
 class Chapter:
     cid: str = ''        # required.
     vid: str = ''        # required.
-    timestamp: str = ''  # required.
     seconds: int = 0     # required.
     lang: str = ''       # required; language code, empty means unknown.
     chapter: str = ''    # required.
@@ -17,7 +16,6 @@ class Chapter:
 _TABLE = 'chapter'
 _COLUMN_CID = 'cid'
 _COLUMN_VID = 'vid'
-_COLUMN_TIMESTAMP = 'timestamp'  # HH:mm:ss
 _COLUMN_SECONDS = 'seconds'
 _COLUMN_LANG = 'lang'  # language code.
 _COLUMN_CHAPTER = 'chapter'
@@ -29,13 +27,12 @@ _COLUMN_UPDATE_TIMESTAMP = 'update_timestamp'
 def create_chapter_table():
     commit(f'''
         CREATE TABLE IF NOT EXISTS {_TABLE} (
-            {_COLUMN_CID}       TEXT NOT NULL PRIMARY KEY,
-            {_COLUMN_VID}       TEXT NOT NULL DEFAULT '',
-            {_COLUMN_TIMESTAMP} TEXT NOT NULL DEFAULT '',
-            {_COLUMN_SECONDS}   INTEGER NOT NULL DEFAULT 0,
-            {_COLUMN_LANG}      TEXT NOT NULL DEFAULT '',
-            {_COLUMN_CHAPTER}   TEXT NOT NULL DEFAULT '',
-            {_COLUMN_SUMMARY}   TEXT NOT NULL DEFAULT '',
+            {_COLUMN_CID}      TEXT NOT NULL PRIMARY KEY,
+            {_COLUMN_VID}      TEXT NOT NULL DEFAULT '',
+            {_COLUMN_SECONDS}  INTEGER NOT NULL DEFAULT 0,
+            {_COLUMN_LANG}     TEXT NOT NULL DEFAULT '',
+            {_COLUMN_CHAPTER}  TEXT NOT NULL DEFAULT '',
+            {_COLUMN_SUMMARY}  TEXT NOT NULL DEFAULT '',
             {_COLUMN_CREATE_TIMESTAMP} INTEGER NOT NULL DEFAULT 0,
             {_COLUMN_UPDATE_TIMESTAMP} INTEGER NOT NULL DEFAULT 0
         )
@@ -59,7 +56,6 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
         SELECT
               {_COLUMN_CID},
               {_COLUMN_VID},
-              {_COLUMN_TIMESTAMP},
               {_COLUMN_SECONDS},
               {_COLUMN_LANG},
               {_COLUMN_CHAPTER},
@@ -71,11 +67,10 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
     return list(map(lambda r: Chapter(
         cid=r[0],
         vid=r[1],
-        timestamp=r[2],
-        seconds=r[3],
-        lang=r[4],
-        chapter=r[5],
-        summary=r[6],
+        seconds=r[2],
+        lang=r[3],
+        chapter=r[4],
+        summary=r[5],
     ), res))
 
 
@@ -89,7 +84,6 @@ def _insert_chapter(chapter: Chapter):
         INSERT INTO {_TABLE} (
             {_COLUMN_CID},
             {_COLUMN_VID},
-            {_COLUMN_TIMESTAMP},
             {_COLUMN_SECONDS},
             {_COLUMN_LANG},
             {_COLUMN_CHAPTER},
@@ -99,7 +93,6 @@ def _insert_chapter(chapter: Chapter):
         ) VALUES (
             '{sqlescape(chapter.cid)}',
             '{sqlescape(chapter.vid)}',
-            '{sqlescape(chapter.timestamp)}',
              {chapter.seconds},
             '{sqlescape(chapter.lang)}',
             '{sqlescape(chapter.chapter)}',
