@@ -9,7 +9,7 @@ from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 
 from constants import APPLICATION_JSON
-from database import Chapter, \
+from database import Chapter, Slicer, \
     create_chapter_table, \
     find_chapters_by_vid, \
     insert_chapters, \
@@ -95,14 +95,19 @@ async def summarize():
 
     vid = _parse_vid_from_body(body)
     chapters = _parse_chapters_from_body(body)
+    rds_key = _build_summarize_rds_key(vid)
 
     found = find_chapters_by_vid(vid)
     if found:
-        logger.info(f'summarize, found chapters in database, vid={vid}')
-        await _do_if_found_chapters_in_database(vid, found)
-        return _build_summarize_response(found, State.DONE)
+        if chapters and found[0].slicer != Slicer.YOUTUBE:
+            logger.info(f'summarize, need to resummarize, vid={vid}')
+            delete_chapters_by_vid(vid)  # first step.
+            rds.delete(rds_key)  # second step.
+        else:
+            logger.info(f'summarize, found chapters in database, vid={vid}')
+            await _do_if_found_chapters_in_database(vid, found)
+            return _build_summarize_response(found, State.DONE)
 
-    rds_key = _build_summarize_rds_key(vid)
     if rds.exists(rds_key):
         logger.info(f'summarize, but repeated, vid={vid}')
         rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
