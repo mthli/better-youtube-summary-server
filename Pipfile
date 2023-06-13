@@ -16,6 +16,7 @@ language-data = "*"
 lxml = "*"
 quart = "*"
 hypercorn = "*"
+arq = "*"
 
 [dev-packages]
 autopep8 = "*"
