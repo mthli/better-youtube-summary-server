@@ -77,6 +77,11 @@ async def sse():
         logger.info(f'sse, but no transcript for now, vid={vid}')
         return _build_summarize_response([], State.NOTHING)
 
+    summarize_rds_key = _build_summarize_rds_key(vid)
+    if not rds.exists(summarize_rds_key):
+        logger.warning(f'sse, but no summarize process, vid={vid}')
+        return _build_summarize_response([], State.NOTHING)
+
     # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
     res = await make_response(
         sse_subscribe(vid),
