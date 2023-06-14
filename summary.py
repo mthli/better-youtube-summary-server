@@ -26,9 +26,9 @@ class TimedText:
     text: str = ''       # required.
 
 
-# We use 6k window to detect chapters which is better than 4k,
+# We use 8k window to detect chapters which is better than 4k,
 # expand the window if necessary (price sensitive).
-_DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO_16K.value / 16 * 6 - 160
+_DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO_16K.value / 2 - 160
 _DETECT_CHAPTERS_PROMPT = '''
 Given the following content, trying to detect its chapter.
 The content is taken from a video, possibly a conversation without role markers.
