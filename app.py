@@ -30,7 +30,8 @@ class State(StrEnum):
     DONE = 'done'
 
 
-_SUMMARIZE_KEY_EX = 300  # 5 mins.
+_SUMMARIZE_RDS_KEY_EX = 300  # 5 mins.
+_NO_TRANSCRIPT_RDS_KEY_EX = 86400  # 24 hours.
 
 app = Quart(__name__)
 create_chapter_table()
@@ -71,6 +72,11 @@ async def sse():
         await _do_if_found_chapters_in_database(vid, found)
         return _build_summarize_response(found, State.DONE)
 
+    no_transcript_rds_key = _build_no_transcript_rds_key(vid)
+    if rds.exists(no_transcript_rds_key):
+        logger.info(f'sse, but no transcript for now, vid={vid}')
+        return _build_summarize_response([], State.NOTHING)
+
     # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
     res = await make_response(
         sse_subscribe(vid),
@@ -99,38 +105,53 @@ async def summarize():
 
     vid = _parse_vid_from_body(body)
     chapters = _parse_chapters_from_body(body)
-    rds_key = _build_summarize_rds_key(vid)
+
+    no_transcript_rds_key = _build_no_transcript_rds_key(vid)
+    summarize_rds_key = _build_summarize_rds_key(vid)
 
     found = find_chapters_by_vid(vid)
     if found:
         if chapters and found[0].slicer != Slicer.YOUTUBE:
             logger.info(f'summarize, need to resummarize, vid={vid}')
-            delete_chapters_by_vid(vid)  # first step.
-            rds.delete(rds_key)  # second step.
+            delete_chapters_by_vid(vid)        # 1 step.
+            rds.delete(no_transcript_rds_key)  # 2 step.
+            rds.delete(summarize_rds_key)      # 3 step.
         else:
             logger.info(f'summarize, found chapters in database, vid={vid}')
             await _do_if_found_chapters_in_database(vid, found)
             return _build_summarize_response(found, State.DONE)
 
-    if rds.exists(rds_key):
+    if rds.exists(no_transcript_rds_key):
+        logger.info(f'summarize, but no transcript for now, vid={vid}')
+        return _build_summarize_response([], State.NOTHING)
+
+    if rds.exists(summarize_rds_key):
         logger.info(f'summarize, but repeated, vid={vid}')
-        rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
+        rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
         return _build_summarize_response([], State.DOING)
-    rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
+
+    # Set the summary proccess beginning flag here,
+    # because of we need to get the transcript first,
+    # and try to avoid youtube rate limits.
+    rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
 
     try:
-        # FIXME (Matthew Lee) youtube rate limit?
+        # FIXME (Matthew Lee) youtube rate limits?
         timed_texts, lang = parse_timed_texts_and_lang(vid)
         if not timed_texts:
-            rds.delete(rds_key)
             logger.warning(f'summarize, but no transcript found, vid={vid}')
+            rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
+            rds.delete(summarize_rds_key)
             return _build_summarize_response([], State.NOTHING)
     except NoTranscriptFound:
-        rds.delete(rds_key)
         logger.warning(f'summarize, but no transcript found, vid={vid}')
+        rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
+        rds.delete(summarize_rds_key)
         return _build_summarize_response([], State.NOTHING)
     except Exception:
-        rds.delete(rds_key)
+        logger.exception(f'summarize failed, vid={vid}')
+        rds.delete(no_transcript_rds_key)
+        rds.delete(summarize_rds_key)
         raise  # to errorhandler.
 
     await app.arq.enqueue_job('do_summarize_job', vid, chapters, timed_texts, lang)
@@ -185,8 +206,9 @@ async def do_summarize_job(
 ):
     logger.info(f'do summarize job, vid={vid}')
 
-    rds_key = _build_summarize_rds_key(vid)
-    rds.set(rds_key, 1, ex=_SUMMARIZE_KEY_EX)
+    # Set flag again, although we have done this before.
+    summarize_rds_key = _build_summarize_rds_key(vid)
+    rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
 
     chapters, has_exception = await summarizing(
         vid=vid,
@@ -200,11 +222,16 @@ async def do_summarize_job(
         delete_chapters_by_vid(vid)
         insert_chapters(chapters)
 
-    rds.delete(rds_key)
+    rds.delete(_build_no_transcript_rds_key(vid))
+    rds.delete(summarize_rds_key)
 
 
 def _build_summarize_rds_key(vid: str) -> str:
     return f'summarize_{vid}'
+
+
+def _build_no_transcript_rds_key(vid: str) -> str:
+    return f'no_transcript_{vid}'
 
 
 def _build_summarize_response(chapters: list[Chapter], state: State) -> dict:
@@ -216,6 +243,7 @@ def _build_summarize_response(chapters: list[Chapter], state: State) -> dict:
 
 
 async def _do_if_found_chapters_in_database(vid: str, found: list[Chapter]):
+    rds.delete(_build_no_transcript_rds_key(vid))
     rds.delete(_build_summarize_rds_key(vid))
     data = list(map(lambda c: asdict(c), found))
     await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
