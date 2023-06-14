@@ -27,9 +27,9 @@ class TimedText:
 
 
 # FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
-_DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
-_DETECT_CHAPTERS_PROMPT = '''
-Given the following content, trying to detect its chapter.
+_GENERATE_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
+_GENERATE_CHAPTERS_PROMPT = '''
+Given the following content, trying to generate its chapter.
 
 The content is taken from a video subtitles, consists of many lines,
 the line format is `[index] [start time in seconds] [text...]`,
@@ -40,13 +40,13 @@ for example `[0] [10] [How are you]`.
 {content}
 >>>
 
-Your job is trying to detect the content chapter,
+Your job is trying to generate the chapter of the content,
 the chapter context should summarize most of lines from top to bottom,
 and ignore irrelevant parts.
 
 Return a JSON object containing the following fields:
 - "end_at": int field, the chapter context end at which line [index].
-- "chapter": string field, a brief title of the chapter.
+- "chapter": string field, a brief title of the chapter context.
 - "seconds": int field, the [start time] of the chapter in seconds, must >= {start_time}.
 - "timestamp": string field, the [start time] of the chapter in "HH:mm:ss" format.
 
@@ -140,7 +140,7 @@ async def summarize(
 
     chapters: list[Chapter] = _parse_chapters(vid, chapters, lang)
     if not chapters:
-        chapters = await _detect_chapters(vid, timed_texts, lang)
+        chapters = await _generate_chapters(vid, timed_texts, lang)
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
@@ -203,7 +203,7 @@ def _parse_chapters(vid: str, chapters: list[dict], lang: str) -> list[Chapter]:
     return res
 
 
-async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) -> list[Chapter]:
+async def _generate_chapters(vid: str, timed_texts: list[TimedText], lang: str) -> list[Chapter]:
     chapters: list[Chapter] = []
     timed_texts_start = 0
     latest_end_at = -1
@@ -211,7 +211,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
     while True:
         texts = timed_texts[timed_texts_start:]
         if not texts:
-            logger.info(f'detect chapters, drained, '
+            logger.info(f'generate chapters, drained, '
                         f'vid={vid}, '
                         f'len={len(timed_texts)}, '
                         f'timed_texts_start={timed_texts_start}')
@@ -223,24 +223,24 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
         for t in texts:
             temp = f'[{timed_texts_start}] [{int(t.start)}] [{t.text}]'
             temp = content + '\n' + temp if content else temp
-            prompt = _DETECT_CHAPTERS_PROMPT.format(
+            prompt = _GENERATE_CHAPTERS_PROMPT.format(
                 content=temp,
                 start_time=start_time,
             )
 
             message = build_message(Role.USER, prompt)
-            if count_tokens([message]) < _DETECT_CHAPTERS_TOKEN_LIMIT:
+            if count_tokens([message]) < _GENERATE_CHAPTERS_TOKEN_LIMIT:
                 content = temp.strip()
                 timed_texts_start += 1
             else:
                 break  # for.
 
-        logger.info(f'detect chapters, '
+        logger.info(f'generate chapters, '
                     f'vid={vid}, '
                     f'timed_texts_start={timed_texts_start}, '
                     f'latest_end_at={latest_end_at}')
 
-        prompt = _DETECT_CHAPTERS_PROMPT.format(
+        prompt = _GENERATE_CHAPTERS_PROMPT.format(
             content=content,
             start_time=start_time,
         )
@@ -253,7 +253,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
             timeout=90,
         )
         content = get_content(body)
-        logger.info(f'detect chapters, vid={vid}, content=\n{content}')
+        logger.info(f'generate chapters, vid={vid}, content=\n{content}')
 
         res: dict = json.loads(content)
         chapter = res.get('chapter', '').strip()
@@ -262,7 +262,7 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
 
         # Looks like it's the end and meanless, so ignore the chapter.
         if type(end_at) is not int:  # NoneType.
-            logger.info(f'detect chapters, end_at is not int, vid={vid}')
+            logger.info(f'generate chapters, end_at is not int, vid={vid}')
             break  # drained.
 
         if chapter and seconds >= 0:
@@ -284,15 +284,15 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
 
         # Looks like it's the end and meanless, so ignore the chapter.
         # if type(end_at) is not int:  # NoneType.
-        #     logger.info(f'detect chapters, end_at is not int, vid={vid}')
+        #     logger.info(f'generate chapters, end_at is not int, vid={vid}')
         #     break  # drained.
 
         if end_at <= latest_end_at:
-            logger.warning(f'detect chapters, avoid infinite loop, vid={vid}')
+            logger.warning(f'generate chapters, avoid infinite loop, vid={vid}')  # nopep8.
             latest_end_at += 5  # force a different context.
             timed_texts_start = latest_end_at
         elif end_at > timed_texts_start:
-            logger.warning(f'detect chapters, avoid drain early, vid={vid}')
+            logger.warning(f'generate chapters, avoid drain early, vid={vid}')
             latest_end_at = timed_texts_start
             timed_texts_start = latest_end_at + 1
         else:
