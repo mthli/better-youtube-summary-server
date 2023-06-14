@@ -10,7 +10,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 
 from database import Chapter, Slicer
 from logger import logger
-from openai import Role, TokenLimit, \
+from openai import Model, Role, TokenLimit, \
     build_message, \
     chat, \
     count_tokens, \
@@ -26,7 +26,9 @@ class TimedText:
     text: str = ''       # required.
 
 
-_DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value - 160  # nopep8, 3936.
+# We use 6k window to detect chapters which is better than 4k,
+# expand the window if necessary (price sensitive).
+_DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO_16K.value / 16 * 6 - 160
 _DETECT_CHAPTERS_PROMPT = '''
 Given the following content, trying to detect its chapter.
 The content is taken from a video, possibly a conversation without role markers.
@@ -55,6 +57,7 @@ Do not output any redundant explanation or information other than JSON.
 > JSON:
 '''
 
+# Still use 4k window to summarize chapters (price sensitive).
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value * 7 / 8  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_PROMPT = '''
@@ -72,6 +75,7 @@ Do not output any redundant explanation or information.
 > CONCISE BULLET LIST SUMMARY:
 '''
 
+# Still use 4k window to summarize chapters (price sensitive).
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L4
 _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value * 5 / 8  # nopep8, 2560.
 _SUMMARIZE_NEXT_CHAPTER_PROMPT = '''
@@ -246,9 +250,14 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
         )
 
         message = build_message(Role.USER, prompt)
-        body = await chat(messages=[message], top_p=0.1, timeout=90)
+        body = await chat(
+            messages=[message],
+            model=Model.GPT_3_5_TURBO_16K,
+            top_p=0.1,
+            timeout=90,
+        )
         content = get_content(body)
-        logger.info(f'detect chapters, vid={vid}, content=\n{content}')
+        logger.info(f'detect chapters, vid={vid}, content={content}')
 
         res: dict = json.loads(content)
         chapter = res.get('chapter', '').strip()
