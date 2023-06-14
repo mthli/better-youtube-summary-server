@@ -10,7 +10,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 
 from database import Chapter, Slicer
 from logger import logger
-from openai import Role, TokenLimit, \
+from openai import Model, Role, TokenLimit, \
     build_message, \
     chat, \
     count_tokens, \
@@ -26,12 +26,12 @@ class TimedText:
     text: str = ''       # required.
 
 
-_DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value - 160  # nopep8, 3936.
+# FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
+_DETECT_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
 _DETECT_CHAPTERS_PROMPT = '''
 Given the following content, trying to detect its chapter.
-The content is taken from a video, possibly a conversation without role markers.
 
-The content consists of many lines,
+The content is taken from a video subtitles, consists of many lines,
 the line format is `[index] [start time in seconds] [text...]`,
 for example `[0] [10] [How are you]`.
 
@@ -55,32 +55,42 @@ Do not output any redundant explanation or information other than JSON.
 > JSON:
 '''
 
+# FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
-_SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value * 7 / 8  # nopep8, 3584.
+_SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 7 / 8  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_PROMPT = '''
 List the most important points of the following content according to the topic of "{chapter}".
-The content is taken from a video, possibly a conversation without role markers.
-
-Do not output any redundant or irrelevant points, keep the output concise.
-Do not output any redundant explanation or information.
+The content is taken from a video subtitles, consists of many lines.
 
 > Content:
 >>>
 {content}
 >>>
 
+Do not output any redundant or irrelevant points, keep the output concise.
+Do not output any redundant explanation or information.
+
 > CONCISE BULLET LIST SUMMARY:
 '''
 
+# FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L4
-_SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO.value * 5 / 8  # nopep8, 2560.
+_SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 5 / 8  # nopep8, 2560.
 _SUMMARIZE_NEXT_CHAPTER_PROMPT = '''
-Your job is to produce a final bullet list summary.
-
 We have provided an existing bullet list summary up to a certain point.
-We have the opportunity to refine the existing summary (only if needed) with some more content below.
 
-The content is taken from a video, possibly a conversation without role markers, and its topic is about "{chapter}".
+> Existing bullet list summary:
+>>>
+{summary}
+>>>
+
+We have the opportunity to refine the existing summary (only if needed) with some more content below.
+The content is taken from a video subtitles, consists of many lines, and its topic is about "{chapter}".
+
+> More content:
+>>>
+{content}
+>>>
 
 Refine the existing bullet list summary (only if needed) with the given content.
 Do not refine the existing summary with the given content if it isn't useful or doesn't make sense.
@@ -88,16 +98,6 @@ Do not output any redundant or irrelevant points, keep the output concise.
 Do not output any redundant explanation or information.
 
 If the existing bullet list summary is too long, you can summarize it again, keep the important points.
-
-> Existing bullet list summary:
->>>
-{summary}
->>>
-
-> More content:
->>>
-{content}
->>>
 
 > REFINE BULLET LIST SUMMARY:
 '''
@@ -246,7 +246,12 @@ async def _detect_chapters(vid: str, timed_texts: list[TimedText], lang: str) ->
         )
 
         message = build_message(Role.USER, prompt)
-        body = await chat(messages=[message], top_p=0.1, timeout=90)
+        body = await chat(
+            messages=[message],
+            model=Model.GPT_3_5_TURBO,
+            top_p=0.1,
+            timeout=90,
+        )
         content = get_content(body)
         logger.info(f'detect chapters, vid={vid}, content=\n{content}')
 
@@ -362,7 +367,12 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
             )
 
         message = build_message(Role.USER, prompt)
-        body = await chat(messages=[message], top_p=0.1, timeout=90)
+        body = await chat(
+            messages=[message],
+            model=Model.GPT_3_5_TURBO,
+            top_p=0.1,
+            timeout=90,
+        )
         summary = get_content(body).strip()
 
         chapter.summary = summary  # cache even not finished.
