@@ -7,7 +7,7 @@ from arq.typing import WorkerSettingsBase
 from quart import Quart, abort, json, request, make_response
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
-from youtube_transcript_api import NoTranscriptFound
+from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled
 
 from constants import APPLICATION_JSON
 from database import Chapter, Slicer, \
@@ -143,7 +143,7 @@ async def summarize(vid: str):
             rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
             rds.delete(summarize_rds_key)
             return _build_summarize_response([], State.NOTHING)
-    except NoTranscriptFound:
+    except (NoTranscriptFound, TranscriptsDisabled):
         logger.warning(f'summarize, but no transcript found, vid={vid}')
         rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
         rds.delete(summarize_rds_key)
