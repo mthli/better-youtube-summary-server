@@ -97,6 +97,7 @@ async def sse(vid: str):
 
 # {
 #   'chapters':  dict, optional.
+#   'no_transcript': boolean, optional.
 # }
 @app.post('/api/summarize/<string:vid>')
 async def summarize(vid: str):
@@ -106,6 +107,8 @@ async def summarize(vid: str):
         abort(400, f'summarize failed, e={e}')
 
     chapters = _parse_chapters_from_body(body)
+    no_transcript = bool(body.get('no_transcript', False))
+
     no_transcript_rds_key = _build_no_transcript_rds_key(vid)
     summarize_rds_key = _build_summarize_rds_key(vid)
 
@@ -121,7 +124,7 @@ async def summarize(vid: str):
             await _do_if_found_chapters_in_database(vid, found)
             return _build_summarize_response(found, State.DONE)
 
-    if rds.exists(no_transcript_rds_key):
+    if rds.exists(no_transcript_rds_key) or no_transcript:
         logger.info(f'summarize, but no transcript for now, vid={vid}')
         return _build_summarize_response([], State.NOTHING)
 
