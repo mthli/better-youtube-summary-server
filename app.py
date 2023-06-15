@@ -62,10 +62,8 @@ def handle_exception(e: HTTPException):
     return response
 
 
-@app.get('/api/sse')
-async def sse():
-    vid = _parse_vid_from_body(request.args.to_dict())
-
+@app.get('/api/sse/<string:vid>')
+async def sse(vid: str):
     found = find_chapters_by_vid(vid)
     if found:
         logger.info(f'sse, found chapters in database, vid={vid}')
@@ -98,19 +96,16 @@ async def sse():
 
 
 # {
-#   'vid':       str,  required.
 #   'chapters':  dict, optional.
 # }
-@app.post('/api/summarize')
-async def summarize():
+@app.post('/api/summarize/<string:vid>')
+async def summarize(vid: str):
     try:
         body: dict = await request.get_json()
     except Exception as e:
         abort(400, f'summarize failed, e={e}')
 
-    vid = _parse_vid_from_body(body)
     chapters = _parse_chapters_from_body(body)
-
     no_transcript_rds_key = _build_no_transcript_rds_key(vid)
     summarize_rds_key = _build_summarize_rds_key(vid)
 
@@ -161,16 +156,6 @@ async def summarize():
 
     await app.arq.enqueue_job('do_summarize_job', vid, chapters, timed_texts, lang)
     return _build_summarize_response(chapters, State.DOING)
-
-
-def _parse_vid_from_body(body: dict) -> str:
-    vid = body.get('vid', '')
-    if not isinstance(vid, str):
-        abort(400, f'"vid" must be string, vid={vid}')
-    vid = vid.strip()
-    if not vid:
-        abort(400, f'"vid" is empty')
-    return vid
 
 
 def _parse_chapters_from_body(body: dict) -> list[dict]:
