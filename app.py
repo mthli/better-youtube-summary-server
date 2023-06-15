@@ -158,7 +158,7 @@ async def summarize(vid: str):
         raise  # to errorhandler.
 
     await app.arq.enqueue_job('do_summarize_job', vid, chapters, timed_texts, lang)
-    return _build_summarize_response(chapters, State.DOING)
+    return _build_summarize_response([], State.DOING)
 
 
 def _parse_chapters_from_body(body: dict) -> list[dict]:
