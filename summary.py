@@ -67,6 +67,8 @@ The content is taken from a video subtitles, consists of many lines.
 {content}
 >>>
 
+Each bullet point should end with a period.
+
 Do not output any redundant or irrelevant points, keep the output concise.
 Do not output any redundant explanation or information.
 
@@ -93,6 +95,8 @@ The content is taken from a video subtitles, consists of many lines, and its top
 >>>
 
 Refine the existing bullet list summary (only if needed) with the given content.
+Each bullet point should end with a period.
+
 Do not refine the existing summary with the given content if it isn't useful or doesn't make sense.
 Do not output any redundant or irrelevant points, keep the output concise.
 Do not output any redundant explanation or information.
