@@ -80,7 +80,7 @@ async def summarize(vid: str):
 
     found = find_chapters_by_vid(vid)
     if found:
-        if chapters and found[0].slicer != Slicer.YOUTUBE:
+        if (chapters and found[0].slicer != Slicer.YOUTUBE) or _check_found_need_to_resummarize(found):
             logger.info(f'summarize, need to resummarize, vid={vid}')
             delete_chapters_by_vid(vid)        # 1 step.
             rds.delete(no_transcript_rds_key)  # 2 step.
@@ -137,12 +137,11 @@ def _parse_chapters_from_body(body: dict) -> list[dict]:
     return chapters
 
 
-# def _parse_language_from_body(body: dict) -> str:
-#     language = body.get('language', '')
-#     if not isinstance(language, str):
-#         abort(400, f'"language" must be string')
-#     language = language.strip()
-#     return language if language else 'en'
+def _check_found_need_to_resummarize(found: list[Chapter] = []) -> bool:
+    for f in found:
+        if (not f.summary) or len(f.summary) <= 0:
+            return True
+    return False
 
 
 # ctx is arq first param, keep it.
@@ -179,7 +178,7 @@ async def do_summarize_job(
     if chapters and (not has_exception):
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
-        # TODO insert_chapters(chapters)
+        insert_chapters(chapters)
 
     rds.delete(_build_no_transcript_rds_key(vid))
     rds.delete(summarize_rds_key)
