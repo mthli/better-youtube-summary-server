@@ -1,26 +1,6 @@
-from dataclasses import dataclass
-from enum import unique
-
 from sqlite import commit, fetchall, sqlescape
-from strenum import StrEnum
 
-
-@dataclass
-class Chapter:
-    cid: str = ''      # required.
-    vid: str = ''      # required.
-    seconds: int = 0   # required.
-    slicer: str = ''   # required.
-    lang: str = ''     # required; language code, empty means unknown.
-    chapter: str = ''  # required.
-    summary: str = ''  # optional.
-
-
-@unique
-class Slicer(StrEnum):
-    YOUTUBE = 'youtube'
-    OPENAI = 'openai'
-
+from data import Chapter
 
 _TABLE = 'chapter'
 _COLUMN_CID = 'cid'

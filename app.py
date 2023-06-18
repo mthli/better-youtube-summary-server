@@ -10,7 +10,8 @@ from werkzeug.exceptions import HTTPException
 from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled
 
 from constants import APPLICATION_JSON
-from database import Chapter, Slicer, \
+from data import Chapter, Slicer
+from database import \
     create_chapter_table, \
     find_chapters_by_vid, \
     insert_chapters, \
