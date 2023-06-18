@@ -1,14 +1,14 @@
 import asyncio
 import json
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict
 from sys import maxsize
 from uuid import uuid4
 
 from quart import abort
 from youtube_transcript_api import YouTubeTranscriptApi
 
-from data import Chapter, Slicer
+from data import Chapter, Slicer, TimedText
 from logger import logger
 from openai import Model, Role, TokenLimit, \
     build_message, \
@@ -16,14 +16,6 @@ from openai import Model, Role, TokenLimit, \
     count_tokens, \
     get_content
 from sse import SseEvent, sse_publish
-
-
-@dataclass
-class TimedText:
-    start: float = 0     # required; in seconds.
-    duration: float = 0  # required; in seconds.
-    lang: str = 'en'     # required; language code.
-    text: str = ''       # required.
 
 
 # FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?

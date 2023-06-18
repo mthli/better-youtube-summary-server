@@ -30,6 +30,13 @@ class Slicer(StrEnum):
 
 
 @unique
+class SseEvent(StrEnum):
+    UNKNOWN = 'unknown'
+    SUMMARY = 'summary'
+    CLOSE = 'done'
+
+
+@unique
 class SummaryState(StrEnum):
     NOTHING = 'nothing'
     DOING = 'doing'

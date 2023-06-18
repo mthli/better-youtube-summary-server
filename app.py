@@ -10,7 +10,7 @@ from werkzeug.exceptions import HTTPException
 from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled
 
 from constants import APPLICATION_JSON
-from data import Chapter, Slicer
+from data import Chapter, Slicer, TimedText
 from database import \
     create_chapter_table, \
     find_chapters_by_vid, \
@@ -19,9 +19,7 @@ from database import \
 from logger import logger
 from rds import rds
 from sse import SseEvent, sse_publish, sse_subscribe
-from summary import TimedText, \
-    parse_timed_texts_and_lang, \
-    summarize as summarizing
+from summary import parse_timed_texts_and_lang, summarize as summarizing
 
 
 @unique
