@@ -1,10 +1,7 @@
-from enum import unique
-
 from arq import create_pool
 from arq.connections import RedisSettings
 from arq.typing import WorkerSettingsBase
 from quart import Quart, Response, abort, json, request, make_response
-from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled
 
@@ -20,14 +17,6 @@ from logger import logger
 from rds import rds
 from sse import SseEvent, sse_publish, sse_subscribe
 from summary import parse_timed_texts_and_lang, summarize as summarizing
-
-
-@unique
-class State(StrEnum):
-    NOTHING = 'nothing'
-    DOING = 'doing'
-    DONE = 'done'
-
 
 _SUMMARIZE_RDS_KEY_EX = 300  # 5 mins.
 _NO_TRANSCRIPT_RDS_KEY_EX = 86400  # 24 hours.
