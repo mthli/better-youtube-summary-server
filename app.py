@@ -179,7 +179,7 @@ async def do_summarize_job(
     if chapters and (not has_exception):
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
-        insert_chapters(chapters)
+        # TODO insert_chapters(chapters)
 
     rds.delete(_build_no_transcript_rds_key(vid))
     rds.delete(summarize_rds_key)
