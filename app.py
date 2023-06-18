@@ -1,16 +1,16 @@
-from dataclasses import asdict
 from enum import unique
 
 from arq import create_pool
 from arq.connections import RedisSettings
 from arq.typing import WorkerSettingsBase
-from quart import Quart, abort, json, request, make_response
+from quart import Quart, Response, abort, json, request, make_response
 from strenum import StrEnum
 from werkzeug.exceptions import HTTPException
 from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled
 
 from constants import APPLICATION_JSON
-from data import Chapter, Slicer, TimedText
+from data import Chapter, Slicer, SummaryState, TimedText, \
+    build_summary_response
 from database import \
     create_chapter_table, \
     find_chapters_by_vid, \
@@ -61,39 +61,6 @@ def handle_exception(e: HTTPException):
     return response
 
 
-@app.get('/api/sse/<string:vid>')
-async def sse(vid: str):
-    found = find_chapters_by_vid(vid)
-    if found:
-        logger.info(f'sse, found chapters in database, vid={vid}')
-        await _do_if_found_chapters_in_database(vid, found)
-        return _build_summarize_response(found, State.DONE)
-
-    no_transcript_rds_key = _build_no_transcript_rds_key(vid)
-    if rds.exists(no_transcript_rds_key):
-        logger.info(f'sse, but no transcript for now, vid={vid}')
-        return _build_summarize_response([], State.NOTHING)
-
-    summarize_rds_key = _build_summarize_rds_key(vid)
-    if not rds.exists(summarize_rds_key):
-        logger.warning(f'sse, but no summarize process, vid={vid}')
-        return _build_summarize_response([], State.NOTHING)
-
-    # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
-    res = await make_response(
-        sse_subscribe(vid),
-        {
-            'Content-Type': 'text/event-stream',
-            'Transfer-Encoding': 'chunked',
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no',
-        },
-    )
-
-    res.timeout = None
-    return res
-
-
 # {
 #   'chapters':  dict, optional.
 #   'no_transcript': boolean, optional.
@@ -121,16 +88,16 @@ async def summarize(vid: str):
         else:
             logger.info(f'summarize, found chapters in database, vid={vid}')
             await _do_if_found_chapters_in_database(vid, found)
-            return _build_summarize_response(found, State.DONE)
+            return build_summary_response(SummaryState.DONE, found)
 
     if rds.exists(no_transcript_rds_key) or no_transcript:
         logger.info(f'summarize, but no transcript for now, vid={vid}')
-        return _build_summarize_response([], State.NOTHING)
+        return build_summary_response(SummaryState.NOTHING)
 
     if rds.exists(summarize_rds_key):
         logger.info(f'summarize, but repeated, vid={vid}')
         rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
-        return _build_summarize_response([], State.DOING)
+        return await _build_sse_response(vid)
 
     # Set the summary proccess beginning flag here,
     # because of we need to get the transcript first,
@@ -144,12 +111,12 @@ async def summarize(vid: str):
             logger.warning(f'summarize, but no transcript found, vid={vid}')
             rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
             rds.delete(summarize_rds_key)
-            return _build_summarize_response([], State.NOTHING)
+            return build_summary_response(SummaryState.NOTHING)
     except (NoTranscriptFound, TranscriptsDisabled):
         logger.warning(f'summarize, but no transcript found, vid={vid}')
         rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
         rds.delete(summarize_rds_key)
-        return _build_summarize_response([], State.NOTHING)
+        return build_summary_response(SummaryState.NOTHING)
     except Exception:
         logger.exception(f'summarize failed, vid={vid}')
         rds.delete(no_transcript_rds_key)
@@ -157,7 +124,7 @@ async def summarize(vid: str):
         raise  # to errorhandler.
 
     await app.arq.enqueue_job('do_summarize_job', vid, chapters, timed_texts, lang)
-    return _build_summarize_response([], State.DOING)
+    return await _build_sse_response(vid)
 
 
 def _parse_chapters_from_body(body: dict) -> list[dict]:
@@ -226,19 +193,27 @@ def _build_no_transcript_rds_key(vid: str) -> str:
     return f'no_transcript_{vid}'
 
 
-def _build_summarize_response(chapters: list[Chapter], state: State) -> dict:
-    chapters = list(map(lambda c: asdict(c), chapters))
-    return {
-        'chapters': chapters,
-        'state': state.value,
-    }
+# https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
+async def _build_sse_response(vid: str) -> Response:
+    res = await make_response(
+        sse_subscribe(vid),
+        {
+            'Content-Type': 'text/event-stream',
+            'Transfer-Encoding': 'chunked',
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+        },
+    )
+
+    res.timeout = None
+    return res
 
 
 async def _do_if_found_chapters_in_database(vid: str, found: list[Chapter]):
     rds.delete(_build_no_transcript_rds_key(vid))
     rds.delete(_build_summarize_rds_key(vid))
-    data = list(map(lambda c: asdict(c), found))
-    await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
+    data = build_summary_response(SummaryState.DONE, found)
+    await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
     await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
 
 

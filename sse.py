@@ -12,14 +12,12 @@ from rds import ards
 
 @unique
 class SseEvent(StrEnum):
-    UNKNOWN = 'unknown'
-    CHAPTER = 'chapter'
-    CHAPTERS = 'chapters'
+    SUMMARY = 'summary'
     CLOSE = 'close'
 
 
 @dataclass
-class Message:
+class SseMessage:
     event: str = ''  # required.
     data: dict or list[dict] = field(default_factory=dict or list[dict])  # nopep8; required.
 
@@ -31,7 +29,7 @@ class Message:
 
 
 async def sse_publish(channel: str, event: SseEvent, data: dict or list[dict]):
-    message = Message(event=event.value, data=data)
+    message = SseMessage(event=event.value, data=data)
     message = json.dumps(asdict(message))
     await ards.publish(channel=channel, message=message)
 
@@ -40,19 +38,19 @@ async def sse_publish(channel: str, event: SseEvent, data: dict or list[dict]):
 async def sse_subscribe(channel: str):
     pubsub = ards.pubsub()
     await pubsub.subscribe(channel)
-    logger.info(f'subscribe, channel={channel}')
+    logger.info(f'sse_subscribe, channel={channel}')
 
     try:
         while True:
             async with async_timeout.timeout(300):  # 5 mins.
                 obj = await pubsub.get_message(ignore_subscribe_messages=True)
                 if isinstance(obj, dict):
-                    message = Message(**json.loads(obj['data']))
+                    message = SseMessage(**json.loads(obj['data']))
                     yield str(message)
 
                     if message.event == SseEvent.CLOSE:
-                        logger.info(f'subscribe, on close, channel={channel}')
-                        break
+                        logger.info(f'sse_subscribe, on close, channel={channel}')  # nopep8.
+                        break  # while.
     finally:
         await sse_unsubscribe(channel)
 
@@ -60,6 +58,6 @@ async def sse_subscribe(channel: str):
 async def sse_unsubscribe(channel: str):
     try:
         await ards.pubsub().unsubscribe(channel)
-        logger.info(f'unsubscribe, channel={channel}')
+        logger.info(f'sse_unsubscribe, channel={channel}')
     except Exception:
-        logger.exception(f'unsubscribe, channel={channel}')
+        logger.exception(f'sse_unsubscribe, channel={channel}')

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import unique
 
 from strenum import StrEnum
@@ -30,20 +30,15 @@ class Slicer(StrEnum):
 
 
 @unique
-class SseEvent(StrEnum):
-    UNKNOWN = 'unknown'
-    SUMMARY = 'summary'
-    CLOSE = 'done'
-
-
-@unique
 class SummaryState(StrEnum):
     NOTHING = 'nothing'
     DOING = 'doing'
     DONE = 'done'
 
 
-@dataclass
-class Summary:
-    state: SummaryState = SummaryState.NOTHING
-    chapters: list[Chapter] = []
+def build_summary_response(state: SummaryState, chapters: list[Chapter] = []) -> dict:
+    chapters = list(map(lambda c: asdict(c), chapters))
+    return {
+        'state': state.value,
+        'chapters': chapters,
+    }

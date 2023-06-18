@@ -1,14 +1,14 @@
 import asyncio
 import json
 
-from dataclasses import asdict
 from sys import maxsize
 from uuid import uuid4
 
 from quart import abort
 from youtube_transcript_api import YouTubeTranscriptApi
 
-from data import Chapter, Slicer, TimedText
+from data import Chapter, Slicer, SummaryState, TimedText, \
+    build_summary_response
 from logger import logger
 from openai import Model, Role, TokenLimit, \
     build_message, \
@@ -140,8 +140,8 @@ async def summarize(
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
-        data = list(map(lambda c: asdict(c), chapters))
-        await sse_publish(channel=vid, event=SseEvent.CHAPTERS, data=data)
+        data = build_summary_response(SummaryState.DOING, chapters)
+        await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
 
     tasks = []
     for i, c in enumerate(chapters):
@@ -274,8 +274,8 @@ async def _generate_chapters(vid: str, timed_texts: list[TimedText], lang: str) 
             chapters.append(data)
             await sse_publish(
                 channel=vid,
-                event=SseEvent.CHAPTER,
-                data=asdict(data),
+                event=SseEvent.SUMMARY,
+                data=build_summary_response(SummaryState.DOING, chapters),
             )
 
         # Looks like it's the end and meanless, so ignore the chapter.
@@ -377,6 +377,6 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
     chapter.summary = summary.strip()
     await sse_publish(
         channel=chapter.vid,
-        event=SseEvent.CHAPTER,
-        data=asdict(chapter),
+        event=SseEvent.SUMMARY,
+        data=build_summary_response(SummaryState.DOING, [chapter]),
     )
