@@ -6,7 +6,7 @@
       "exec_mode": "fork",
       "kill_timeout": 5000,
       "listen_timeout": 10000,
-      "max_memory_restart": "512M",
+      "max_memory_restart": "256M",
       "watch": false
     },
     {
@@ -15,7 +15,7 @@
       "exec_mode": "fork",
       "kill_timeout": 5000,
       "listen_timeout": 10000,
-      "max_memory_restart": "512M",
+      "max_memory_restart": "768M",
       "watch": false
     }
   ]
