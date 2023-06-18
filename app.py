@@ -68,7 +68,7 @@ def handle_exception(e: HTTPException):
 @app.post('/api/summarize/<string:vid>')
 async def summarize(vid: str):
     try:
-        body: dict = await request.get_json()
+        body: dict = await request.get_json() or {}
     except Exception as e:
         abort(400, f'summarize failed, e={e}')
 
