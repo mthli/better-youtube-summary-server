@@ -162,7 +162,9 @@ async def summarize(
             logger.error(f'summarize, but has exception, vid={vid}, e={r}')
             has_exception = True
 
-    await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
+    data = build_summary_response(SummaryState.DONE, chapters)
+    await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
+    await sse_publish(channel=vid, event=SseEvent.CLOSE)
     return chapters, has_exception
 
 

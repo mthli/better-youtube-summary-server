@@ -214,7 +214,7 @@ async def _do_if_found_chapters_in_database(vid: str, found: list[Chapter]):
     rds.delete(_build_summarize_rds_key(vid))
     data = build_summary_response(SummaryState.DONE, found)
     await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
-    await sse_publish(channel=vid, event=SseEvent.CLOSE, data={})
+    await sse_publish(channel=vid, event=SseEvent.CLOSE)
 
 
 # https://arq-docs.helpmanual.io/#simple-usage

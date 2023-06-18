@@ -28,7 +28,7 @@ class SseMessage:
         return '\n'.join(lines) + '\n\n'
 
 
-async def sse_publish(channel: str, event: SseEvent, data: dict or list[dict]):
+async def sse_publish(channel: str, event: SseEvent, data: dict or list[dict] = {}):
     message = SseMessage(event=event.value, data=data)
     message = json.dumps(asdict(message))
     await ards.publish(channel=channel, message=message)
