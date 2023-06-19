@@ -164,7 +164,7 @@ async def do_summarize_job(
         lang=lang,
     )
 
-    if chapters and (not has_exception):
+    if chapters:  # and (not has_exception):
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
         insert_chapters(chapters)
