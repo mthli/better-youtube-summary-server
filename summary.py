@@ -105,7 +105,21 @@ def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
 
     # https://en.wikipedia.org/wiki/Languages_used_on_the_Internet#Content_languages_on_YouTube
     transcript_list = YouTubeTranscriptApi.list_transcripts(vid)
-    transcript = transcript_list.find_transcript(['en', 'es', 'pt', 'hi', 'ko', 'zh'])  # nopep8.
+    transcript = transcript_list.find_transcript([
+        'en',  # English.
+        'es',  # Spanish.
+        'pt',  # Portuguese.
+        'hi',  # Hindi.
+        'ko',  # Korean.
+        'zh-Hans',  # Chinese (Simplified).
+        'zh-Hant',  # Chinese (Traditional).
+        'ar',  # Arabic.
+        'id',  # Indonesian.
+        'fr',  # French.
+        'ja',  # Japanese.
+        'ru',  # Russian.
+        'de',  # German.
+    ])
 
     lang = transcript.language_code
     array: list[dict] = transcript.fetch()
