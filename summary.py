@@ -20,31 +20,36 @@ from sse import SseEvent, sse_publish
 
 # FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 _GENERATE_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
-_GENERATE_CHAPTERS_PROMPT = '''
+_GENERATE_CHAPTERS_SYSTEM_PROMPT = '''
 Given the following content, trying to generate its chapter.
 
-The content is taken from a video subtitles, consists of many lines,
-the line format is `[index] [start time in seconds] [text...]`,
-for example `[0] [10] [How are you]`.
+The content is a piece of video subtitles represented as a JSON array,
+the format of the JSON array elements is as follows:
 
-> Content:
->>>
-{content}
->>>
+```json
+{{
+  "index":   int field, the subtitle line index.
+  "seconds": int field, the subtitle start time in seconds.
+  "text": string field, the subtitle text itself.
+}}
+```
 
 Your job is trying to generate the chapter of the content,
-the chapter context should summarize most of lines from top to bottom,
+the chapter context should include most of subtitles from top to bottom,
 and ignore irrelevant parts.
 
 Return a JSON object containing the following fields:
-- "end_at": int field, the chapter context end at which line [index].
-- "chapter": string field, a brief title of the chapter context.
-- "seconds": int field, the [start time] of the chapter in seconds, must >= {start_time}.
-- "timestamp": string field, the [start time] of the chapter in "HH:mm:ss" format.
+
+```json
+{{
+  "chapter":   string field, give a concise title of the chapter context.
+  "seconds":      int field, the start time of the chapter in seconds, must >= {start_time}.
+  "timestamp": string field, the start time of the chapter in "HH:mm:ss" format.
+  "end_at":       int field, the chapter context end at which line index.
+}}
+```
 
 Do not output any redundant explanation or information other than JSON.
-
-> JSON:
 '''
 
 # FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
@@ -136,12 +141,12 @@ def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
 
 
 async def summarize(
-    openai_api_key: str,
     vid: str,
     trigger: str,
     chapters: list[dict],
     timed_texts: list[TimedText],
     lang: str,
+    openai_api_key: str = '',
 ) -> tuple[list[Chapter], bool]:
     logger.info(
         f'summarize, '
@@ -158,11 +163,11 @@ async def summarize(
     )
     if not chapters:
         chapters = await _generate_chapters(
-            openai_api_key=openai_api_key,
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
             lang=lang,
+            openai_api_key=openai_api_key,
         )
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
@@ -180,9 +185,9 @@ async def summarize(
             end_time=end_time,
         )
         tasks.append(_summarize_chapter(
-            openai_api_key=openai_api_key,
             chapter=c,
             timed_texts=texts,
+            openai_api_key=openai_api_key,
         ))
 
     res = await asyncio.gather(*tasks, return_exceptions=True)
@@ -239,11 +244,11 @@ def _parse_chapters(
 
 
 async def _generate_chapters(
-    openai_api_key: str,
     vid: str,
     trigger: str,
     timed_texts: list[TimedText],
     lang: str,
+    openai_api_key: str = '',
 ) -> list[Chapter]:
     chapters: list[Chapter] = []
     timed_texts_start = 0
@@ -260,17 +265,24 @@ async def _generate_chapters(
 
         content = ''
         start_time = int(texts[0].start)
+        system_prompt = _GENERATE_CHAPTERS_SYSTEM_PROMPT.format(start_time=start_time)  # nopep8.
+        system_message = build_message(Role.SYSTEM, system_prompt)
 
         for t in texts:
-            temp = f'[{timed_texts_start}] [{int(t.start)}] [{t.text}]'
-            temp = content + '\n' + temp if content else temp
-            prompt = _GENERATE_CHAPTERS_PROMPT.format(
-                content=temp,
-                start_time=start_time,
-            )
+            text = t.text.strip()
+            if not text:
+                continue
 
-            message = build_message(Role.USER, prompt)
-            if count_tokens([message]) < _GENERATE_CHAPTERS_TOKEN_LIMIT:
+            temp = {
+                'index': timed_texts_start,
+                'seconds': int(t.start),
+                'text': text,
+            }
+            temp = json.dumps(temp, ensure_ascii=False)
+            temp = content + '\n' + temp if content else temp
+            user_message = build_message(Role.USER, temp)
+
+            if count_tokens([system_message, user_message]) < _GENERATE_CHAPTERS_TOKEN_LIMIT:
                 content = temp.strip()
                 timed_texts_start += 1
             else:
@@ -281,14 +293,9 @@ async def _generate_chapters(
                     f'timed_texts_start={timed_texts_start}, '
                     f'latest_end_at={latest_end_at}')
 
-        prompt = _GENERATE_CHAPTERS_PROMPT.format(
-            content=content,
-            start_time=start_time,
-        )
-
-        message = build_message(Role.USER, prompt)
+        user_message = build_message(Role.USER, content)
         body = await chat(
-            messages=[message],
+            messages=[system_message, user_message],
             model=Model.GPT_3_5_TURBO,
             top_p=0.1,
             timeout=90,
@@ -356,9 +363,9 @@ def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end
 
 
 async def _summarize_chapter(
-    openai_api_key: str,
     chapter: Chapter,
     timed_texts: list[TimedText],
+    openai_api_key: str = '',
 ):
     summary = ''
     summary_start = 0

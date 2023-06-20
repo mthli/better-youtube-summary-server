@@ -182,12 +182,12 @@ async def summarize(vid: str):
 
     await app.arq.enqueue_job(
         do_summarize_job.__name__,
-        openai_api_key,
         vid,
         uid,
         chapters,
         timed_texts,
         lang,
+        openai_api_key,
     )
 
     return await _build_sse_response(vid)
@@ -263,12 +263,12 @@ async def do_on_arq_worker_shutdown(ctx: dict):
 # ctx is arq first param, keep it.
 async def do_summarize_job(
     ctx: dict,
-    openai_api_key,
     vid: str,
     trigger: str,
     chapters: list[dict],
     timed_texts: list[TimedText],
     lang: str,
+    openai_api_key: str = '',
 ):
     logger.info(f'do summarize job, vid={vid}')
 
@@ -277,12 +277,12 @@ async def do_summarize_job(
     rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
 
     chapters, has_exception = await summarizing(
-        openai_api_key=openai_api_key,
         vid=vid,
         trigger=trigger,
         chapters=chapters,
         timed_texts=timed_texts,
         lang=lang,
+        openai_api_key=openai_api_key,
     )
 
     if chapters:  # and (not has_exception):
