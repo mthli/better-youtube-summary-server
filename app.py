@@ -14,9 +14,19 @@ from database.chapter import \
     find_chapters_by_vid, \
     insert_chapters, \
     delete_chapters_by_vid
-from database.data import Chapter, Slicer, SummaryState, TimedText, User, \
+from database.data import \
+    Chapter, \
+    Feedback, \
+    Slicer, \
+    SummaryState, \
+    TimedText, \
+    User, \
     build_summary_response
-from database.feedback import create_feedback_table
+from database.feedback import \
+    create_feedback_table, \
+    find_feedback, \
+    insert_or_update_feedback, \
+    delete_feedback
 from database.user import create_user_table, find_user, insert_or_update_user
 from logger import logger
 from rds import rds
@@ -67,7 +77,48 @@ async def add_user():
 
 
 # {
-#   'chapters':  dict, optional.
+#   'vid':   str, required.
+#   'bad':  bool, optional.
+#   'good': bool, optional.
+# }
+@app.post('/api/feedback')
+async def feedback():
+    try:
+        body: dict = await request.get_json() or {}
+    except Exception as e:
+        abort(400, f'feedback failed, e={e}')
+
+    _ = _parse_uid_from_headers(request.headers)
+
+    vid = body.get('vid', '')
+    if not isinstance(vid, str):
+        abort(400, '"vid" must be string')
+    vid = vid.strip()
+    if not vid:
+        return {}
+
+    feedback = find_feedback(vid)
+    if not feedback:
+        feedback = Feedback(vid=vid)
+
+    good = body.get('good', False)
+    if not isinstance(good, bool):
+        abort(400, '"good" must be bool')
+    if good:
+        feedback.good += 1
+
+    bad = body.get('bad', False)
+    if not isinstance(bad, bool):
+        abort(400, '"bad" must be bool')
+    if bad:
+        feedback.bad += 1
+
+    insert_or_update_feedback(feedback)
+    return {}
+
+
+# {
+#   'chapters': dict, optional.
 #   'no_transcript': boolean, optional.
 # }
 @app.post('/api/summarize/<string:vid>')
