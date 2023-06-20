@@ -216,8 +216,8 @@ def _parse_chapters(
                 cid=str(uuid4()),
                 vid=vid,
                 trigger=trigger,
-                seconds=seconds,
                 slicer=Slicer.YOUTUBE.value,
+                seconds=seconds,
                 lang=lang,
                 chapter=c['title'],
             ))
@@ -304,8 +304,8 @@ async def _generate_chapters(
                 cid=str(uuid4()),
                 vid=vid,
                 trigger=trigger,
-                seconds=seconds,
                 slicer=Slicer.OPENAI.value,
+                seconds=seconds,
                 lang=lang,
                 chapter=chapter,
             )
@@ -354,7 +354,7 @@ async def _summarize_chapter(
 ):
     summary = ''
     summary_start = 0
-    is_first_summarize = True
+    refined_count = 0
 
     while True:
         texts = timed_texts[summary_start:]
@@ -366,7 +366,7 @@ async def _summarize_chapter(
 
         for t in texts:
             lines = content + '\n' + t.text if content else t.text
-            if is_first_summarize:
+            if refined_count <= 0:
                 system_prompt = _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
                     chapter=chapter.chapter,
                 )
@@ -379,7 +379,7 @@ async def _summarize_chapter(
             system_message = build_message(Role.SYSTEM, system_prompt)
             user_message = build_message(Role.USER, lines)
             token_limit = _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT \
-                if is_first_summarize else _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT
+                if refined_count <= 0 else _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT
 
             if count_tokens([system_message, user_message]) < token_limit:
                 content_has_changed = True
@@ -393,7 +393,7 @@ async def _summarize_chapter(
             logger.warning(f'summarize chapter, but content not changed, vid={chapter.vid}')  # nopep8.
             break
 
-        if is_first_summarize:
+        if refined_count <= 0:
             system_prompt = _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
                 chapter=chapter.chapter,
             )
@@ -415,9 +415,11 @@ async def _summarize_chapter(
 
         summary = get_content(body).strip()
         chapter.summary = summary  # cache even not finished.
-        is_first_summarize = False
+        refined_count += 1
 
     chapter.summary = summary.strip()
+    chapter.refined = refined_count
+
     await sse_publish(
         channel=chapter.vid,
         event=SseEvent.SUMMARY,

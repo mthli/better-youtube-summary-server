@@ -14,6 +14,7 @@ class Chapter:
     lang: str = ''     # required; language code, empty means unknown.
     chapter: str = ''  # required.
     summary: str = ''  # optional.
+    refined: int = 0   # optional.
 
 
 @dataclass
