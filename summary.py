@@ -137,6 +137,7 @@ def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
 
 async def summarize(
     vid: str,
+    trigger: str,
     chapters: list[dict],
     timed_texts: list[TimedText],
     lang: str,
@@ -148,9 +149,19 @@ async def summarize(
         f'len(timed_texts)={len(timed_texts)}, '
         f'lang={lang}')
 
-    chapters: list[Chapter] = _parse_chapters(vid, chapters, lang)
+    chapters: list[Chapter] = _parse_chapters(
+        vid=vid,
+        trigger=trigger,
+        chapters=chapters,
+        lang=lang,
+    )
     if not chapters:
-        chapters = await _generate_chapters(vid, timed_texts, lang)
+        chapters = await _generate_chapters(
+            vid=vid,
+            trigger=trigger,
+            timed_texts=timed_texts,
+            lang=lang,
+        )
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
@@ -182,7 +193,12 @@ async def summarize(
     return chapters, has_exception
 
 
-def _parse_chapters(vid: str, chapters: list[dict], lang: str) -> list[Chapter]:
+def _parse_chapters(
+    vid: str,
+    trigger: str,
+    chapters: list[dict],
+    lang: str,
+) -> list[Chapter]:
     res: list[Chapter] = []
 
     if not chapters:
@@ -203,6 +219,7 @@ def _parse_chapters(vid: str, chapters: list[dict], lang: str) -> list[Chapter]:
             res.append(Chapter(
                 cid=str(uuid4()),
                 vid=vid,
+                trigger=trigger,
                 seconds=seconds,
                 slicer=Slicer.YOUTUBE.value,
                 lang=lang,
@@ -215,7 +232,12 @@ def _parse_chapters(vid: str, chapters: list[dict], lang: str) -> list[Chapter]:
     return res
 
 
-async def _generate_chapters(vid: str, timed_texts: list[TimedText], lang: str) -> list[Chapter]:
+async def _generate_chapters(
+    vid: str,
+    trigger: str,
+    timed_texts: list[TimedText],
+    lang: str,
+) -> list[Chapter]:
     chapters: list[Chapter] = []
     timed_texts_start = 0
     latest_end_at = -1
@@ -281,6 +303,7 @@ async def _generate_chapters(vid: str, timed_texts: list[TimedText], lang: str) 
             data = Chapter(
                 cid=str(uuid4()),
                 vid=vid,
+                trigger=trigger,
                 seconds=seconds,
                 slicer=Slicer.OPENAI.value,
                 lang=lang,

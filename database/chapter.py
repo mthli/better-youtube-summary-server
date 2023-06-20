@@ -4,6 +4,7 @@ from database.sqlite import commit, fetchall, sqlescape
 _TABLE = 'chapter'
 _COLUMN_CID = 'cid'
 _COLUMN_VID = 'vid'
+_COLUMN_TRIGGER = 'trigger'  # uid.
 _COLUMN_SECONDS = 'seconds'
 _COLUMN_SLICER = 'slicer'
 _COLUMN_LANG = 'lang'  # language code.
@@ -18,6 +19,7 @@ def create_chapter_table():
         CREATE TABLE IF NOT EXISTS {_TABLE} (
             {_COLUMN_CID}      TEXT NOT NULL PRIMARY KEY,
             {_COLUMN_VID}      TEXT NOT NULL DEFAULT '',
+            {_COLUMN_TRIGGER}  TEXT NOT NULL DEFAULT '',
             {_COLUMN_SECONDS}  INTEGER NOT NULL DEFAULT 0,
             {_COLUMN_SLICER}   TEXT NOT NULL DEFAULT '',
             {_COLUMN_LANG}     TEXT NOT NULL DEFAULT '',
@@ -26,6 +28,10 @@ def create_chapter_table():
             {_COLUMN_CREATE_TIMESTAMP} INTEGER NOT NULL DEFAULT 0,
             {_COLUMN_UPDATE_TIMESTAMP} INTEGER NOT NULL DEFAULT 0
         )
+        ''')
+    commit(f'''
+        CREATE INDEX IF NOT EXISTS idx_{_COLUMN_TRIGGER}
+        ON {_TABLE} ({_COLUMN_TRIGGER})
         ''')
     commit(f'''
         CREATE INDEX IF NOT EXISTS idx_{_COLUMN_VID}
@@ -46,6 +52,7 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
         SELECT
               {_COLUMN_CID},
               {_COLUMN_VID},
+              {_COLUMN_TRIGGER},
               {_COLUMN_SECONDS},
               {_COLUMN_SLICER},
               {_COLUMN_LANG},
@@ -58,11 +65,12 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
     return list(map(lambda r: Chapter(
         cid=r[0],
         vid=r[1],
-        seconds=r[2],
-        slicer=r[3],
-        lang=r[4],
-        chapter=r[5],
-        summary=r[6],
+        trigger=r[2],
+        seconds=r[3],
+        slicer=r[4],
+        lang=r[5],
+        chapter=r[6],
+        summary=r[7],
     ), res))
 
 
@@ -76,6 +84,7 @@ def _insert_chapter(chapter: Chapter):
         INSERT INTO {_TABLE} (
             {_COLUMN_CID},
             {_COLUMN_VID},
+            {_COLUMN_TRIGGER},
             {_COLUMN_SECONDS},
             {_COLUMN_SLICER},
             {_COLUMN_LANG},
@@ -86,6 +95,7 @@ def _insert_chapter(chapter: Chapter):
         ) VALUES (
             '{sqlescape(chapter.cid)}',
             '{sqlescape(chapter.vid)}',
+            '{sqlescape(chapter.trigger)}',
              {chapter.seconds},
             '{sqlescape(chapter.slicer)}',
             '{sqlescape(chapter.lang)}',

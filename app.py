@@ -127,7 +127,7 @@ async def summarize(vid: str):
         rds.delete(summarize_rds_key)
         raise  # to errorhandler.
 
-    await app.arq.enqueue_job('do_summarize_job', vid, chapters, timed_texts, lang)
+    await app.arq.enqueue_job('do_summarize_job', vid, uid, chapters, timed_texts, lang)
     return await _build_sse_response(vid)
 
 
@@ -181,6 +181,7 @@ async def do_on_arq_worker_shutdown(ctx: dict):
 async def do_summarize_job(
     ctx: dict,
     vid: str,
+    trigger: str,
     chapters: list[dict],
     timed_texts: list[TimedText],
     lang: str,
@@ -193,6 +194,7 @@ async def do_summarize_job(
 
     chapters, has_exception = await summarizing(
         vid=vid,
+        trigger=trigger,
         chapters=chapters,
         timed_texts=timed_texts,
         lang=lang,

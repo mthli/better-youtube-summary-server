@@ -8,6 +8,7 @@ from strenum import StrEnum
 class Chapter:
     cid: str = ''      # required.
     vid: str = ''      # required.
+    trigger: str = ''  # required; uid, empty means unknown.
     seconds: int = 0   # required.
     slicer: str = ''   # required.
     lang: str = ''     # required; language code, empty means unknown.
