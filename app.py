@@ -81,21 +81,14 @@ async def add_user():
 #   'bad':  bool, optional.
 #   'good': bool, optional.
 # }
-@app.post('/api/feedback')
-async def feedback():
+@app.post('/api/feedback/<string:vid>')
+async def feedback(vid: str):
     try:
         body: dict = await request.get_json() or {}
     except Exception as e:
         abort(400, f'feedback failed, e={e}')
 
     _ = _parse_uid_from_headers(request.headers)
-
-    vid = body.get('vid', '')
-    if not isinstance(vid, str):
-        abort(400, '"vid" must be string')
-    vid = vid.strip()
-    if not vid:
-        return {}
 
     feedback = find_feedback(vid)
     if not feedback:
