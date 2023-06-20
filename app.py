@@ -76,6 +76,7 @@ async def summarize(vid: str):
         abort(400, f'summarize failed, e={e}')
 
     uid = _parse_uid_from_headers(request.headers)
+    openai_api_key = _parse_openai_api_key_from_headers(request.headers)
     chapters = _parse_chapters_from_body(body)
     no_transcript = bool(body.get('no_transcript', False))
 
@@ -127,7 +128,16 @@ async def summarize(vid: str):
         rds.delete(summarize_rds_key)
         raise  # to errorhandler.
 
-    await app.arq.enqueue_job('do_summarize_job', vid, uid, chapters, timed_texts, lang)
+    await app.arq.enqueue_job(
+        do_summarize_job.__name__,
+        openai_api_key,
+        vid,
+        uid,
+        chapters,
+        timed_texts,
+        lang,
+    )
+
     return await _build_sse_response(vid)
 
 
@@ -148,6 +158,13 @@ def _parse_uid_from_headers(headers: Headers, check: bool = True) -> str:
             abort(404, f'user is deleted')
 
     return uid
+
+
+def _parse_openai_api_key_from_headers(headers: Headers) -> str:
+    openai_api_key = headers.get(key='openai_api_key', default='', type=str)
+    if not isinstance(openai_api_key, str):
+        abort(400, f'"openai_api_key" must be string')
+    return openai_api_key.strip()
 
 
 def _parse_chapters_from_body(body: dict) -> list[dict]:
@@ -180,6 +197,7 @@ async def do_on_arq_worker_shutdown(ctx: dict):
 # ctx is arq first param, keep it.
 async def do_summarize_job(
     ctx: dict,
+    openai_api_key,
     vid: str,
     trigger: str,
     chapters: list[dict],
@@ -193,6 +211,7 @@ async def do_summarize_job(
     rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
 
     chapters, has_exception = await summarizing(
+        openai_api_key=openai_api_key,
         vid=vid,
         trigger=trigger,
         chapters=chapters,

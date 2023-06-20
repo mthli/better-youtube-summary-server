@@ -90,8 +90,8 @@ async def chat(
     messages: list[Message],
     model: Model = Model.GPT_3_5_TURBO,
     top_p: float = 0.8,  # [0, 1]
-    api_key: str = '',
     timeout: int = 10,
+    api_key: str = '',
 ) -> dict:
     if not api_key:
         api_key = rds.get(KEY_OPENAI_API_KEY).decode()

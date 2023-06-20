@@ -136,6 +136,7 @@ def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
 
 
 async def summarize(
+    openai_api_key: str,
     vid: str,
     trigger: str,
     chapters: list[dict],
@@ -157,6 +158,7 @@ async def summarize(
     )
     if not chapters:
         chapters = await _generate_chapters(
+            openai_api_key=openai_api_key,
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
@@ -177,7 +179,11 @@ async def summarize(
             start_time=start_time,
             end_time=end_time,
         )
-        tasks.append(_summarize_chapter(chapter=c, timed_texts=texts))
+        tasks.append(_summarize_chapter(
+            openai_api_key=openai_api_key,
+            chapter=c,
+            timed_texts=texts,
+        ))
 
     res = await asyncio.gather(*tasks, return_exceptions=True)
     has_exception = False
@@ -233,6 +239,7 @@ def _parse_chapters(
 
 
 async def _generate_chapters(
+    openai_api_key: str,
     vid: str,
     trigger: str,
     timed_texts: list[TimedText],
@@ -285,6 +292,7 @@ async def _generate_chapters(
             model=Model.GPT_3_5_TURBO,
             top_p=0.1,
             timeout=90,
+            api_key=openai_api_key,
         )
         content = get_content(body)
         logger.info(f'generate chapters, vid={vid}, content=\n{content}')
@@ -347,7 +355,11 @@ def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end
     return res
 
 
-async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
+async def _summarize_chapter(
+    openai_api_key: str,
+    chapter: Chapter,
+    timed_texts: list[TimedText],
+):
     summary = ''
     summary_start = 0
     is_first_summarize = True
@@ -407,6 +419,7 @@ async def _summarize_chapter(chapter: Chapter, timed_texts: list[TimedText]):
             model=Model.GPT_3_5_TURBO,
             top_p=0.1,
             timeout=90,
+            api_key=openai_api_key,
         )
         summary = get_content(body).strip()
 
