@@ -17,7 +17,6 @@ from openai import Model, Role, TokenLimit, \
     get_content
 from sse import SseEvent, sse_publish
 
-
 # FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 _GENERATE_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
 _GENERATE_CHAPTERS_SYSTEM_PROMPT = '''
@@ -55,41 +54,29 @@ Do not output any redundant explanation or information other than JSON.
 # FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 7 / 8  # nopep8, 3584.
-_SUMMARIZE_FIRST_CHAPTER_PROMPT = '''
+_SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
 List the most important points of the following content according to the topic of "{chapter}".
-The content is taken from a video subtitles, consists of many lines.
-
-> Content:
->>>
-{content}
->>>
+The content is a piece of video subtitles, consists of many lines.
 
 Each bullet point should end with a period.
 
 Do not output any redundant or irrelevant points, keep the output concise.
 Do not output any redundant explanation or information.
-
-> CONCISE BULLET LIST SUMMARY:
 '''
 
 # FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L4
 _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 5 / 8  # nopep8, 2560.
-_SUMMARIZE_NEXT_CHAPTER_PROMPT = '''
-We have provided an existing bullet list summary up to a certain point.
+_SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT = '''
+We have provided an existing bullet list summary up to a certain point,
+and its topic is about "{chapter}",
 
-> Existing bullet list summary:
->>>
+```
 {summary}
->>>
+```
 
-We have the opportunity to refine the existing summary (only if needed) with some more content below.
-The content is taken from a video subtitles, consists of many lines, and its topic is about "{chapter}".
-
-> More content:
->>>
-{content}
->>>
+We have the opportunity to refine the existing summary (only if needed) with some more content.
+The content is a piece of video subtitles, consists of many lines.
 
 Refine the existing bullet list summary (only if needed) with the given content.
 Each bullet point should end with a period.
@@ -99,12 +86,10 @@ Do not output any redundant or irrelevant points, keep the output concise.
 Do not output any redundant explanation or information.
 
 If the existing bullet list summary is too long, you can summarize it again, keep the important points.
-
-> REFINE BULLET LIST SUMMARY:
 '''
 
 
-# NoTranscriptFound
+# NoTranscriptFound, TranscriptsDisabled...
 def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
     timed_texts: list[TimedText] = []
 
@@ -382,21 +367,21 @@ async def _summarize_chapter(
         for t in texts:
             lines = content + '\n' + t.text if content else t.text
             if is_first_summarize:
-                prompt = _SUMMARIZE_FIRST_CHAPTER_PROMPT.format(
+                system_prompt = _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
                     chapter=chapter.chapter,
-                    content=lines,
                 )
             else:
-                prompt = _SUMMARIZE_NEXT_CHAPTER_PROMPT.format(
+                system_prompt = _SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT.format(
                     chapter=chapter.chapter,
                     summary=summary,
-                    content=lines,
                 )
 
-            message = build_message(Role.USER, prompt)
+            system_message = build_message(Role.SYSTEM, system_prompt)
+            user_message = build_message(Role.USER, lines)
             token_limit = _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT \
                 if is_first_summarize else _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT
-            if count_tokens([message]) < token_limit:
+
+            if count_tokens([system_message, user_message]) < token_limit:
                 content_has_changed = True
                 content = lines.strip()
                 summary_start += 1
@@ -409,27 +394,26 @@ async def _summarize_chapter(
             break
 
         if is_first_summarize:
-            prompt = _SUMMARIZE_FIRST_CHAPTER_PROMPT.format(
+            system_prompt = _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
                 chapter=chapter.chapter,
-                content=content,
             )
         else:
-            prompt = _SUMMARIZE_NEXT_CHAPTER_PROMPT.format(
+            system_prompt = _SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT.format(
                 chapter=chapter.chapter,
                 summary=summary,
-                content=content,
             )
 
-        message = build_message(Role.USER, prompt)
+        system_message = build_message(Role.SYSTEM, system_prompt)
+        user_message = build_message(Role.USER, content)
         body = await chat(
-            messages=[message],
+            messages=[system_message, user_message],
             model=Model.GPT_3_5_TURBO,
             top_p=0.1,
             timeout=90,
             api_key=openai_api_key,
         )
-        summary = get_content(body).strip()
 
+        summary = get_content(body).strip()
         chapter.summary = summary  # cache even not finished.
         is_first_summarize = False
 
