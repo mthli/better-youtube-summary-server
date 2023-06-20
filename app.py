@@ -11,8 +11,9 @@ from database.chapter import \
     find_chapters_by_vid, \
     insert_chapters, \
     delete_chapters_by_vid
-from database.data import Chapter, Slicer, SummaryState, TimedText, \
+from database.data import Chapter, Slicer, SummaryState, TimedText, User, \
     build_summary_response
+from database.user import create_user_table
 from logger import logger
 from rds import rds
 from sse import SseEvent, sse_publish, sse_subscribe
@@ -23,6 +24,7 @@ _NO_TRANSCRIPT_RDS_KEY_EX = 86400  # 24 hours.
 
 app = Quart(__name__)
 create_chapter_table()
+create_user_table()
 
 
 # https://pgjones.gitlab.io/quart/how_to_guides/startup_shutdown.html

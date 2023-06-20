@@ -36,6 +36,12 @@ class SummaryState(StrEnum):
     DONE = 'done'
 
 
+@dataclass
+class User:
+    uid: str = ''             # required.
+    is_deleted: bool = False  # optional.
+
+
 def build_summary_response(state: SummaryState, chapters: list[Chapter] = []) -> dict:
     chapters = list(map(lambda c: asdict(c), chapters))
     return {
