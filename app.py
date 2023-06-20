@@ -213,9 +213,10 @@ def _parse_uid_from_headers(headers: Headers, check: bool = True) -> str:
 
 
 def _parse_openai_api_key_from_headers(headers: Headers) -> str:
-    openai_api_key = headers.get(key='openai_api_key', default='', type=str)
+    # Don't use underscore here because of Ngnix.
+    openai_api_key = headers.get(key='openai-api-key', default='', type=str)
     if not isinstance(openai_api_key, str):
-        abort(400, f'"openai_api_key" must be string')
+        abort(400, f'"openai-api-key" must be string')
     return openai_api_key.strip()
 
 
