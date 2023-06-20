@@ -418,7 +418,7 @@ async def _summarize_chapter(
         refined_count += 1
 
     chapter.summary = summary.strip()
-    chapter.refined = refined_count
+    chapter.refined = refined_count - 1 if refined_count > 0 else 0
 
     await sse_publish(
         channel=chapter.vid,
