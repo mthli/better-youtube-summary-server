@@ -138,7 +138,8 @@ async def summarize(vid: str):
 
     found = find_chapters_by_vid(vid)
     if found:
-        if (chapters and found[0].slicer != Slicer.YOUTUBE) or _check_found_need_to_resummarize(found):
+        if (chapters and found[0].slicer != Slicer.YOUTUBE) or \
+                _check_found_need_to_resummarize(vid, found):
             logger.info(f'summarize, need to resummarize, vid={vid}')
             delete_chapters_by_vid(vid)        # 1 step.
             rds.delete(no_transcript_rds_key)  # 2 step.
@@ -230,11 +231,24 @@ def _parse_chapters_from_body(body: dict) -> list[dict]:
     return chapters
 
 
-def _check_found_need_to_resummarize(found: list[Chapter] = []) -> bool:
+def _check_found_need_to_resummarize(vid: str, found: list[Chapter] = []) -> bool:
     for f in found:
         if (not f.summary) or len(f.summary) <= 0:
             return True
-    return False
+
+    feedback = find_feedback(vid)
+    if not feedback:
+        return False
+
+    good = feedback.good if feedback.good > 0 else 1
+    bad = feedback.bad if feedback.bad > 0 else 1
+
+    # DO NOTHING if total less then 10.
+    if good + bad < 10:
+        return False
+
+    # Need to resummarize if bad percent >= 20%
+    return bad / (good + bad) >= 0.2
 
 
 # ctx is arq first param, keep it.
