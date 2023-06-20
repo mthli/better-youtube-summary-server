@@ -40,8 +40,8 @@ class SummaryState(StrEnum):
 @dataclass
 class Feedback:
     vid: str = ''  # required.
-    good: int = 0  # optional.
-    bad: int = 0   # optional.
+    good: int = 0  # optional; always >= 0.
+    bad: int = 0   # optional; always >= 0.
 
 
 @dataclass

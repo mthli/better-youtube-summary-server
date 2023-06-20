@@ -1,3 +1,4 @@
+from sys import maxsize
 from typing import Optional
 
 from database.data import Feedback
@@ -43,6 +44,44 @@ def find_feedback(vid: str) -> Optional[Feedback]:
         good=res[1],
         bad=res[2],
     )
+
+
+def insert_or_update_feedback(feedback: Feedback):
+    if feedback.good < 0:
+        feedback.good = 0
+    elif feedback.good >= maxsize:
+        feedback.good = maxsize
+
+    if feedback.bad < 0:
+        feedback.bad = 0
+    elif feedback.bad >= maxsize:
+        feedback.bad = maxsize
+
+    previous = find_feedback(feedback.vid)
+    if not previous:
+        commit(f'''
+            INSERT INTO {_TABLE} (
+                {_COLUMN_VID},
+                {_COLUMN_GOOD},
+                {_COLUMN_BAD},
+                {_COLUMN_CREATE_TIMESTAMP},
+                {_COLUMN_UPDATE_TIMESTAMP}
+            ) VALUES (
+                '{sqlescape(feedback.vid)}',
+                 {feedback.good},
+                 {feedback.bad},
+                STRFTIME('%s', 'NOW'),
+                STRFTIME('%s', 'NOW')
+            )
+            ''')
+    else:
+        commit(f'''
+            UPDATE {_TABLE}
+               SET {_COLUMN_GOOD} = {feedback.good},
+                   {_COLUMN_BAD}  = {feedback.good},
+                   {_COLUMN_UPDATE_TIMESTAMP} = STRFTIME('%s', 'NOW')
+             WHERE {_COLUMN_VID}  = '{sqlescape(feedback.uid)}'
+            ''')
 
 
 def delete_feedback(vid: str):
