@@ -80,7 +80,7 @@ def insert_or_update_feedback(feedback: Feedback):
                SET {_COLUMN_GOOD} = {feedback.good},
                    {_COLUMN_BAD}  = {feedback.good},
                    {_COLUMN_UPDATE_TIMESTAMP} = STRFTIME('%s', 'NOW')
-             WHERE {_COLUMN_VID}  = '{sqlescape(feedback.uid)}'
+             WHERE {_COLUMN_VID}  = '{sqlescape(feedback.vid)}'
             ''')
 
 
