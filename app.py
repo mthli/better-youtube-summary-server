@@ -4,6 +4,7 @@ from arq import create_pool
 from arq.connections import RedisSettings
 from arq.typing import WorkerSettingsBase
 from quart import Quart, Response, abort, json, request, make_response
+from werkzeug.datastructures import Headers
 from werkzeug.exceptions import HTTPException
 from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled
 
@@ -55,7 +56,7 @@ def handle_exception(e: HTTPException):
 
 
 @app.post('/api/user')
-async def create_user():
+async def add_user():
     uid = str(uuid4())
     insert_or_update_user(User(uid=uid))
     return {
@@ -74,6 +75,7 @@ async def summarize(vid: str):
     except Exception as e:
         abort(400, f'summarize failed, e={e}')
 
+    uid = _parse_uid_from_headers(request.headers)
     chapters = _parse_chapters_from_body(body)
     no_transcript = bool(body.get('no_transcript', False))
 
@@ -127,6 +129,25 @@ async def summarize(vid: str):
 
     await app.arq.enqueue_job('do_summarize_job', vid, chapters, timed_texts, lang)
     return await _build_sse_response(vid)
+
+
+def _parse_uid_from_headers(headers: Headers, check: bool = True) -> str:
+    uid = headers.get(key='uid', default='', type=str)
+    if not isinstance(uid, str):
+        abort(400, f'"uid" must be string')
+
+    uid = uid.strip()
+    if not uid:
+        abort(400, f'"uid" must not empty')
+
+    if check:
+        user = find_user(uid=uid)
+        if not user:
+            abort(404, f'user not exists')
+        if user.is_deleted:
+            abort(404, f'user is deleted')
+
+    return uid
 
 
 def _parse_chapters_from_body(body: dict) -> list[dict]:
