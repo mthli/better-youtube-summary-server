@@ -38,6 +38,13 @@ class SummaryState(StrEnum):
 
 
 @dataclass
+class Feedback:
+    vid: str = ''  # required.
+    good: int = 0  # optional.
+    bad: int = 0   # optional.
+
+
+@dataclass
 class User:
     uid: str = ''             # required.
     is_deleted: bool = False  # optional.

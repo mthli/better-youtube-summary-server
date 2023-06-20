@@ -16,6 +16,7 @@ from database.chapter import \
     delete_chapters_by_vid
 from database.data import Chapter, Slicer, SummaryState, TimedText, User, \
     build_summary_response
+from database.feedback import create_feedback_table
 from database.user import create_user_table, find_user, insert_or_update_user
 from logger import logger
 from rds import rds
@@ -27,6 +28,7 @@ _NO_TRANSCRIPT_RDS_KEY_EX = 86400  # 24 hours.
 
 app = Quart(__name__)
 create_chapter_table()
+create_feedback_table()
 create_user_table()
 
 
