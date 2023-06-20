@@ -23,4 +23,30 @@ def create_feedback_table():
         ''')
 
 
-# TOOD
+def find_feedback(vid: str) -> Optional[Feedback]:
+    res = fetchall(f'''
+        SELECT
+              {_COLUMN_VID},
+              {_COLUMN_GOOD},
+              {_COLUMN_BAD}
+         FROM {_TABLE}
+        WHERE {_COLUMN_VID} = '{sqlescape(vid)}'
+        LIMIT 1
+        ''')
+
+    if not res:
+        return None
+
+    res = res[0]
+    return Feedback(
+        vid=res[0],
+        good=res[1],
+        bad=res[2],
+    )
+
+
+def delete_feedback(vid: str):
+    commit(f'''
+        DELETE FROM {_TABLE}
+        WHERE {_COLUMN_VID} = '{sqlescape(vid)}'
+        ''')
