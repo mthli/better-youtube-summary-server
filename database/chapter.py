@@ -1,6 +1,5 @@
-from sqlite import commit, fetchall, sqlescape
-
-from data import Chapter
+from database.data import Chapter
+from database.sqlite import commit, fetchall, sqlescape
 
 _TABLE = 'chapter'
 _COLUMN_CID = 'cid'

@@ -6,13 +6,13 @@ from werkzeug.exceptions import HTTPException
 from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled
 
 from constants import APPLICATION_JSON
-from data import Chapter, Slicer, SummaryState, TimedText, \
-    build_summary_response
-from database import \
+from database.chapter import \
     create_chapter_table, \
     find_chapters_by_vid, \
     insert_chapters, \
     delete_chapters_by_vid
+from database.data import Chapter, Slicer, SummaryState, TimedText, \
+    build_summary_response
 from logger import logger
 from rds import rds
 from sse import SseEvent, sse_publish, sse_subscribe

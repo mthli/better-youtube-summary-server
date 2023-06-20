@@ -7,7 +7,7 @@ from uuid import uuid4
 from quart import abort
 from youtube_transcript_api import YouTubeTranscriptApi
 
-from data import Chapter, Slicer, SummaryState, TimedText, \
+from database.data import Chapter, Slicer, SummaryState, TimedText, \
     build_summary_response
 from logger import logger
 from openai import Model, Role, TokenLimit, \
