@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from arq import create_pool
 from arq.connections import RedisSettings
 from arq.typing import WorkerSettingsBase
@@ -13,7 +15,7 @@ from database.chapter import \
     delete_chapters_by_vid
 from database.data import Chapter, Slicer, SummaryState, TimedText, User, \
     build_summary_response
-from database.user import create_user_table
+from database.user import create_user_table, find_user, insert_or_update_user
 from logger import logger
 from rds import rds
 from sse import SseEvent, sse_publish, sse_subscribe
@@ -50,6 +52,15 @@ def handle_exception(e: HTTPException):
     response.content_type = APPLICATION_JSON
     logger.error(f'errorhandler, data={response.data}')
     return response
+
+
+@app.post('/api/user')
+async def create_user():
+    uid = str(uuid4())
+    insert_or_update_user(User(uid=uid))
+    return {
+        'uid': uid,
+    }
 
 
 # {
