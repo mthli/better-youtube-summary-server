@@ -1,3 +1,5 @@
+from sys import maxsize
+
 from database.data import Chapter
 from database.sqlite import commit, fetchall, sqlescape
 
@@ -47,7 +49,7 @@ def create_chapter_table():
         ''')
 
 
-def find_chapters_by_vid(vid: str) -> list[Chapter]:
+def find_chapters_by_vid(vid: str, limit: int = maxsize) -> list[Chapter]:
     res = fetchall(f'''
         SELECT
               {_COLUMN_CID},
@@ -61,6 +63,7 @@ def find_chapters_by_vid(vid: str) -> list[Chapter]:
          FROM {_TABLE}
         WHERE {_COLUMN_VID} = '{sqlescape(vid)}'
         ORDER BY {_COLUMN_SECONDS} ASC
+        LIMIT {limit}
         ''')
     return list(map(lambda r: Chapter(
         cid=r[0],

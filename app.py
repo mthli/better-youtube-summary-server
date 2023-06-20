@@ -90,6 +90,10 @@ async def feedback(vid: str):
 
     _ = _parse_uid_from_headers(request.headers)
 
+    found = find_chapters_by_vid(vid=vid, limit=1)
+    if not found:
+        return {}
+
     feedback = find_feedback(vid)
     if not feedback:
         feedback = Feedback(vid=vid)
@@ -135,8 +139,9 @@ async def summarize(vid: str):
                 _check_found_need_to_resummarize(vid, found):
             logger.info(f'summarize, need to resummarize, vid={vid}')
             delete_chapters_by_vid(vid)        # 1 step.
-            rds.delete(no_transcript_rds_key)  # 2 step.
-            rds.delete(summarize_rds_key)      # 3 step.
+            delete_feedback(vid)               # 2 step.
+            rds.delete(no_transcript_rds_key)  # 3 step.
+            rds.delete(summarize_rds_key)      # 4 step.
         else:
             logger.info(f'summarize, found chapters in database, vid={vid}')
             await _do_if_found_chapters_in_database(vid, found)
@@ -282,6 +287,7 @@ async def do_summarize_job(
     if chapters:  # and (not has_exception):
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
+        delete_feedback(vid)
         insert_chapters(chapters)
 
     rds.delete(_build_no_transcript_rds_key(vid))
