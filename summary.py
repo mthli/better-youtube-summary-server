@@ -48,7 +48,8 @@ Return a JSON object containing the following fields:
 }}
 ```
 
-Do not output any redundant explanation or information other than JSON.
+The output **MUST** be a JSON object.
+Do not output any redundant explanation or information.
 '''
 
 # FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
