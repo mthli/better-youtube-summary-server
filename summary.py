@@ -41,7 +41,7 @@ Return a JSON object containing the following fields:
 
 ```json
 {{
-  "chapter": string field, give a concise title of the chapter context in language "{lang}".
+  "chapter": string field, give a brief title of the chapter context in language "{lang}".
   "seconds": int field, the start time of the chapter in seconds, must >= {start_time}.
   "timestamp": string field, the start time of the chapter in "HH:mm:ss" format.
   "end_at":  int field, the chapter context end at which line index.
@@ -56,15 +56,18 @@ Do not output any redundant explanation or information.
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 7 / 8  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
-Given the following content about "{chapter}", list the most insight points of it.
+Given the following content, please summarize and list the most important points of it.
 
-The content is a piece of video subtitles, consists of many lines,
-and the format of each line is like `[text...]`, for example `[hello world]`.
+The content is a piece of video subtitles, consists of many lines, and its topic is about "{chapter}".
+The format of each line is like `[text...]`, for example `[hello world]`.
 
 The output format should be a markdown bullet list, and each bullet point should end with a period.
 The output language should be "{lang}" in ISO 639-1.
 
-Do not output any redundant or irrelevant points, keep the output clear and accurate.
+Please merge similar viewpoints before the final output.
+Please keep the output clear and accurate.
+
+Do not output any redundant or irrelevant points.
 Do not output any redundant explanation or information.
 '''
 
@@ -85,12 +88,14 @@ The format of each line is like `[text...]`, for example `[hello world]`.
 
 Your job is trying to refine the existing bullet list summary (only if needed) with the given content.
 If the the given content isn't useful or doesn't make sense, don't refine the the existing summary.
-If the existing summary is too long, you can summarize it again, keep the insight points.
 
 The output format should be a markdown bullet list, and each bullet point should end with a period.
 The output language should be "{lang}" in ISO 639-1.
 
-Do not output any redundant or irrelevant points, keep the output clear and accurate.
+Please merge similar viewpoints before the final output.
+Please keep the output clear and accurate.
+
+Do not output any redundant or irrelevant points.
 Do not output any redundant explanation or information.
 '''
 
