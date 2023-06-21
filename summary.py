@@ -34,8 +34,9 @@ the format of the JSON array elements is as follows:
 ```
 
 Your job is trying to generate the chapter of the content,
-the chapter context should include most of subtitles from top to bottom,
-and ignore irrelevant parts.
+you should take the first obvious context from top to bottom as the chapter,
+ignore out-of-context parts and irrelevant parts;
+ignore text like "[Music]", "[Applause]" and so on.
 
 Return a JSON object containing the following fields:
 
@@ -59,11 +60,12 @@ _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
 Given the following content, please summarize and list the most important points of it.
 
 The content is a piece of video subtitles, consists of many lines, and its topic is about "{chapter}".
-The format of each line is like `[text...]`, for example `[hello world]`.
+The format of each line is like `[text...]`, for example `[hello, world]`.
 
 The output format should be a markdown bullet list, and each bullet point should end with a period.
 The output language should be "{lang}" in ISO 639-1.
 
+Please ignore line like "[Music]", "[Applause]" and so on.
 Please merge similar viewpoints before the final output.
 Please keep the output clear and accurate.
 
@@ -92,6 +94,7 @@ If the the given content isn't useful or doesn't make sense, don't refine the th
 The output format should be a markdown bullet list, and each bullet point should end with a period.
 The output language should be "{lang}" in ISO 639-1.
 
+Please ignore line like "[Music]", "[Applause]" and so on.
 Please merge similar viewpoints before the final output.
 Please keep the output clear and accurate.
 
