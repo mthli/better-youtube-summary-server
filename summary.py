@@ -36,7 +36,7 @@ the format of the JSON array elements is as follows:
 Your job is trying to generate the chapter of the content,
 you should take the first obvious context from top to bottom as the chapter,
 ignore out-of-context parts and irrelevant parts;
-ignore text like "[Music]", "[Applause]" and so on.
+ignore text like "[Music]", "[Applause]", "[Laughter]" and so on.
 
 Return a JSON object containing the following fields:
 
@@ -65,7 +65,7 @@ The format of each line is like `[text...]`, for example `[hello, world]`.
 The output format should be a markdown bullet list, and each bullet point should end with a period.
 The output language should be "{lang}" in ISO 639-1.
 
-Please ignore line like "[Music]", "[Applause]" and so on.
+Please ignore line like "[Music]", "[Applause]", "[Laughter]" and so on.
 Please merge similar viewpoints before the final output.
 Please keep the output clear and accurate.
 
@@ -94,7 +94,7 @@ If the the given content isn't useful or doesn't make sense, don't refine the th
 The output format should be a markdown bullet list, and each bullet point should end with a period.
 The output language should be "{lang}" in ISO 639-1.
 
-Please ignore line like "[Music]", "[Applause]" and so on.
+Please ignore line like "[Music]", "[Applause]", "[Laughter]" and so on.
 Please merge similar viewpoints before the final output.
 Please keep the output clear and accurate.
 
