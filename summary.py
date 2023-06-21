@@ -55,12 +55,14 @@ Do not output any redundant explanation or information other than JSON.
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 7 / 8  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
-List the most important points of the following content according to the topic of "{chapter}".
-The content is a piece of video subtitles, consists of many lines.
+Given the following content about "{chapter}", list the most insight points of it.
 
-Each bullet point should end with a period.
+The content is a piece of video subtitles, consists of many lines,
+and the format of each line is like `[text...]`, for example `[hello world]`.
 
-Do not output any redundant or irrelevant points, keep the output concise.
+The output format should be a markdown bullet list, and each bullet point should end with a period.
+
+Do not output any redundant or irrelevant points, keep the output clear and accurate.
 Do not output any redundant explanation or information.
 '''
 
@@ -68,24 +70,25 @@ Do not output any redundant explanation or information.
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L4
 _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 5 / 8  # nopep8, 2560.
 _SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT = '''
-We have provided an existing bullet list summary up to a certain point,
-and its topic is about "{chapter}",
+We have provided an existing bullet list summary up to a certain point:
 
 ```
 {summary}
 ```
 
 We have the opportunity to refine the existing summary (only if needed) with some more content.
-The content is a piece of video subtitles, consists of many lines.
 
-Refine the existing bullet list summary (only if needed) with the given content.
-Each bullet point should end with a period.
+The content is a piece of video subtitles, consists of many lines, and its topic is about "{chapter}".
+The format of each line is like `[text...]`, for example `[hello world]`.
 
-Do not refine the existing summary with the given content if it isn't useful or doesn't make sense.
-Do not output any redundant or irrelevant points, keep the output concise.
+Your job is trying to refine the existing bullet list summary (only if needed) with the given content.
+If the the given content isn't useful or doesn't make sense, don't refine the the existing summary.
+If the existing summary is too long, you can summarize it again, keep the insight points.
+
+The output format should be a markdown bullet list, and each bullet point should end with a period.
+
+Do not output any redundant or irrelevant points, keep the output clear and accurate.
 Do not output any redundant explanation or information.
-
-If the existing bullet list summary is too long, you can summarize it again, keep the important points.
 '''
 
 
@@ -365,7 +368,7 @@ async def _summarize_chapter(
         content_has_changed = False
 
         for t in texts:
-            lines = content + '\n' + t.text if content else t.text
+            lines = content + '\n' + f'[{t.text}]' if content else f'[{t.text}]'  # nopep8.
             if refined_count <= 0:
                 system_prompt = _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
                     chapter=chapter.chapter,
