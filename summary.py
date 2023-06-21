@@ -17,7 +17,6 @@ from openai import Model, Role, TokenLimit, \
     get_content
 from sse import SseEvent, sse_publish
 
-# FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 _GENERATE_ONE_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
 _GENERATE_ONE_CHAPTER_SYSTEM_PROMPT = '''
 Given the following content, trying to generate its chapter.
@@ -53,9 +52,12 @@ The output **MUST** be a JSON object.
 Do not output any redundant explanation or information.
 '''
 
-# FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
-_GENERATE_MULTI_CHAPTERS_PROMPT = '''
-Given the following content, trying to generate its chapters.
+# For 5 mins video such as https://www.youtube.com/watch?v=tCBknJLD4qY,
+# or 10 mins video such as https://www.youtube.com/watch?v=QKOd8TDptt0.
+_GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 768  # nopep8, 3328.
+_GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT = '''
+Given the following content,
+trying to generate its outlines and extract useful information from each outline context.
 
 The content is a video subtitles represented as a JSON array,
 the format of the JSON array elements is as follows:
@@ -67,25 +69,28 @@ the format of the JSON array elements is as follows:
 }}
 ```
 
-Your job is trying to generate the chapters of the content from top to bottom,
-then return a JSON array as shown below:
+Your job is trying to generate the outlines of the content from top to bottom,
+and extract useful information from each outline context;
+ignore the introduction at the beginning and the conclusion at the end;
+ignore text like "[Music]", "[Applause]", "[Laughter]" and so on.
+
+Return a JSON array as shown below:
 
 ```json
 [
   {{
-    "chapter": string field, give a brief title of the chapter context in language "{lang}".
-    "summary": string field, summarize the chapter context clear and accurate.
-    "seconds": int field, the start time of the chapter in seconds.
-    "timestamp": string field, the start time of the chapter in "HH:mm:ss" format.
+    "outline": string field, give a brief title of the outline context in language "{lang}".
+    "information": string field, an useful information in the outline context clear and accurate.
+    "seconds": int field, the start time of the outline in seconds.
+    "timestamp": string field, the start time of the outline in "HH:mm:ss" format.
   }}
 ]
 ```
 
-The output **MUST** be a JSON array ORDER BY seconds ASC.
+The output **MUST** be a JSON object.
 Do not output any redundant explanation or information.
 '''
 
-# FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 7 / 8  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
@@ -105,7 +110,6 @@ Do not output any redundant or irrelevant points.
 Do not output any redundant explanation or information.
 '''
 
-# FIXME (Matthew Lee) how to use gpt-3.5-turbo-16k?
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L4
 _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 5 / 8  # nopep8, 2560.
 _SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT = '''
@@ -408,7 +412,7 @@ async def _test_generate_multi_chapters(
     lang: str,
     openai_api_key: str = '',
 ):
-    system_prompt = _GENERATE_MULTI_CHAPTERS_PROMPT.format(lang=lang)
+    system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
     system_message = build_message(Role.SYSTEM, system_prompt)
     content = ''
 
@@ -428,7 +432,7 @@ async def _test_generate_multi_chapters(
     messages = [system_message, user_message]
 
     tokens = count_tokens(messages)
-    logger.info(f'generate multi chapters, tokens={tokens}, content=\n{content}')  # nopep8.
+    logger.info(f'generate multi chapters, tokens={tokens}')  # nopep8.
 
     body = await chat(
         messages=messages,
