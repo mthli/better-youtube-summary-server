@@ -64,7 +64,7 @@ the format of the JSON array elements is as follows:
 
 ```json
 {{
-  "seconds": int field, the subtitle start time in seconds.
+  "start": int field, the subtitle start time in seconds.
   "text": string field, the subtitle text itself.
 }}
 ```
@@ -81,7 +81,7 @@ Return a JSON array as shown below:
   {{
     "outline": string field, give a brief title of the outline context in language "{lang}".
     "information": string field, an useful information in the outline context clear and accurate.
-    "seconds": int field, the start time of the outline in seconds.
+    "start": int field, the start time of the outline in seconds.
     "timestamp": string field, the start time of the outline in "HH:mm:ss" format.
   }}
 ]
@@ -190,14 +190,27 @@ async def summarize(
         f'len(timed_texts)={len(timed_texts)}, '
         f'lang={lang}')
 
+    has_exception = False
     chapters: list[Chapter] = _parse_chapters(
         vid=vid,
         trigger=trigger,
         chapters=chapters,
         lang=lang,
     )
+
     if not chapters:
-        chapters = await _generate_chapters(
+        chapters = await _generate_multi_chapters(
+            vid=vid,
+            trigger=trigger,
+            timed_texts=timed_texts,
+            lang=lang,
+            openai_api_key=openai_api_key,
+        )
+        if chapters:
+            await _do_before_return(vid, chapters)
+            return chapters, has_exception
+
+        chapters = await _generate_chapters_one_by_one(
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
@@ -227,16 +240,12 @@ async def summarize(
         ))
 
     res = await asyncio.gather(*tasks, return_exceptions=True)
-    has_exception = False
-
     for r in res:
         if isinstance(r, Exception):
             logger.error(f'summarize, but has exception, vid={vid}, e={r}')
             has_exception = True
 
-    data = build_summary_response(SummaryState.DONE, chapters)
-    await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
-    await sse_publish(channel=vid, event=SseEvent.CLOSE)
+    await _do_before_return(vid, chapters)
     return chapters, has_exception
 
 
@@ -279,7 +288,79 @@ def _parse_chapters(
     return res
 
 
-async def _generate_chapters(
+# FIXME (Matthew Lee) suppurt stream.
+async def _generate_multi_chapters(
+    vid: str,
+    trigger: str,
+    timed_texts: list[TimedText],
+    lang: str,
+    openai_api_key: str = '',
+) -> list[Chapter]:
+    system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
+    system_message = build_message(Role.SYSTEM, system_prompt)
+    chapters: list[Chapter] = []
+    content = ''
+
+    for t in timed_texts:
+        text = t.text.strip()
+        if not text:
+            continue
+
+        temp = json.dumps({
+            'start': int(t.start),
+            'text': text,
+        }, ensure_ascii=False)
+
+        content = content + '\n' + temp if content else temp
+
+    user_message = build_message(Role.USER, content)
+    messages = [system_message, user_message]
+
+    tokens = count_tokens(messages)
+    if tokens >= _GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT:
+        logger.info(f'generate multi chapters, reach token limit, vid={vid}, tokens={tokens}')  # nopep8.
+        return chapters
+
+    body = await chat(
+        messages=messages,
+        model=Model.GPT_3_5_TURBO,
+        top_p=0.1,
+        timeout=90,
+        api_key=openai_api_key,
+    )
+
+    content = get_content(body)
+    logger.info(f'generate multi chapters, vid={vid}, content=\n{content}')
+
+    # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
+    try:
+        res: list[dict] = json.loads(content)
+    except Exception:
+        logger.warning(f'generate multi chapters, json loads failed, vid={vid}')  # nopep8.
+        res = []
+
+    for r in res:
+        chapter = r.get('outline', '').strip()
+        information = r.get('information', '').strip()
+        seconds = r.get('start', -1)
+
+        if chapter and information and seconds >= 0:
+            chapters.append(Chapter(
+                cid=str(uuid4()),
+                vid=vid,
+                trigger=trigger,
+                slicer=Slicer.OPENAI.value,
+                seconds=seconds,
+                lang=lang,
+                chapter=chapter,
+                summary=information,
+            ))
+
+    # FIXME (Matthew Lee) prompt output may not sortd by seconds asc.
+    return sorted(chapters, key=lambda c: c.seconds)
+
+
+async def _generate_chapters_one_by_one(
     vid: str,
     trigger: str,
     timed_texts: list[TimedText],
@@ -290,18 +371,10 @@ async def _generate_chapters(
     timed_texts_start = 0
     latest_end_at = -1
 
-    await _test_generate_multi_chapters(
-        vid=vid,
-        trigger=trigger,
-        timed_texts=timed_texts,
-        lang=lang,
-        openai_api_key=openai_api_key,
-    )
-
     while True:
         texts = timed_texts[timed_texts_start:]
         if not texts:
-            logger.info(f'generate chapters, drained, '
+            logger.info(f'generate one chapter, drained, '
                         f'vid={vid}, '
                         f'len={len(timed_texts)}, '
                         f'timed_texts_start={timed_texts_start}')
@@ -335,7 +408,7 @@ async def _generate_chapters(
             else:
                 break  # for.
 
-        logger.info(f'generate chapters, '
+        logger.info(f'generate one chapter, '
                     f'vid={vid}, '
                     f'latest_end_at={latest_end_at}, '
                     f'timed_texts_start={timed_texts_start}')
@@ -349,13 +422,13 @@ async def _generate_chapters(
             api_key=openai_api_key,
         )
         content = get_content(body)
-        logger.info(f'generate chapters, vid={vid}, content=\n{content}')
+        logger.info(f'generate one chapter, vid={vid}, content=\n{content}')
 
         # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
         try:
             res: dict = json.loads(content)
         except Exception:
-            logger.warning(f'generate chapters, json loads failed, vid={vid}')  # nopep8.
+            logger.warning(f'generate one chapter, json loads failed, vid={vid}')  # nopep8.
             res = {}
 
         chapter = res.get('chapter', '').strip()
@@ -364,7 +437,7 @@ async def _generate_chapters(
 
         # Looks like it's the end and meanless, so ignore the chapter.
         if type(end_at) is not int:  # NoneType.
-            logger.info(f'generate chapters, end_at is not int, vid={vid}')
+            logger.info(f'generate one chapter, end_at is not int, vid={vid}')
             break  # drained.
 
         if chapter and seconds >= 0:
@@ -391,11 +464,11 @@ async def _generate_chapters(
         #     break  # drained.
 
         if end_at <= latest_end_at:
-            logger.warning(f'generate chapters, avoid infinite loop, vid={vid}')  # nopep8.
+            logger.warning(f'generate one chapter, avoid infinite loop, vid={vid}')  # nopep8.
             latest_end_at += 5  # force a different context.
             timed_texts_start = latest_end_at
         elif end_at > timed_texts_start:
-            logger.warning(f'generate chapters, avoid drain early, vid={vid}')
+            logger.warning(f'generate one chapter, avoid drain early, vid={vid}')  # nopep8.
             latest_end_at = timed_texts_start
             timed_texts_start = latest_end_at + 1
         else:
@@ -403,47 +476,6 @@ async def _generate_chapters(
             timed_texts_start = end_at + 1
 
     return chapters
-
-
-async def _test_generate_multi_chapters(
-    vid: str,
-    trigger: str,
-    timed_texts: list[TimedText],
-    lang: str,
-    openai_api_key: str = '',
-):
-    system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
-    system_message = build_message(Role.SYSTEM, system_prompt)
-    content = ''
-
-    for t in timed_texts:
-        text = t.text.strip()
-        if not text:
-            continue
-
-        temp = json.dumps({
-            'seconds': int(t.start),
-            'text': text,
-        }, ensure_ascii=False)
-
-        content = content + '\n' + temp if content else temp
-
-    user_message = build_message(Role.USER, content)
-    messages = [system_message, user_message]
-
-    tokens = count_tokens(messages)
-    logger.info(f'generate multi chapters, tokens={tokens}')  # nopep8.
-
-    body = await chat(
-        messages=messages,
-        model=Model.GPT_3_5_TURBO,
-        top_p=0.1,
-        timeout=90,
-        api_key=openai_api_key,
-    )
-
-    content = get_content(body)
-    logger.info(f'generate multi chapters, vid={vid}, content=\n{content}')
 
 
 def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end_time: int = maxsize) -> list[TimedText]:
@@ -539,3 +571,9 @@ async def _summarize_chapter(
         event=SseEvent.SUMMARY,
         data=build_summary_response(SummaryState.DOING, [chapter]),
     )
+
+
+async def _do_before_return(vid: str, chapters: list[Chapter]):
+    data = build_summary_response(SummaryState.DONE, chapters)
+    await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
+    await sse_publish(channel=vid, event=SseEvent.CLOSE)

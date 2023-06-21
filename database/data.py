@@ -4,6 +4,7 @@ from enum import unique
 from strenum import StrEnum
 
 
+# FIXME (Matthew Lee) rename `seconds` to `start`
 @dataclass
 class Chapter:
     cid: str = ''      # required.
