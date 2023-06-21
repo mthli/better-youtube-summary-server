@@ -293,8 +293,8 @@ async def _generate_chapters(
 
         logger.info(f'generate chapters, '
                     f'vid={vid}, '
-                    f'timed_texts_start={timed_texts_start}, '
-                    f'latest_end_at={latest_end_at}')
+                    f'latest_end_at={latest_end_at}, '
+                    f'timed_texts_start={timed_texts_start}')
 
         user_message = build_message(Role.USER, content)
         body = await chat(
@@ -307,7 +307,13 @@ async def _generate_chapters(
         content = get_content(body)
         logger.info(f'generate chapters, vid={vid}, content=\n{content}')
 
-        res: dict = json.loads(content)
+        # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
+        try:
+            res: dict = json.loads(content)
+        except Exception:
+            logger.warning(f'generate chapters, json loads failed, vid={vid}')  # nopep8.
+            res = {}
+
         chapter = res.get('chapter', '').strip()
         seconds = res.get('seconds', -1)
         end_at = res.get('end_at')
