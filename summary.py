@@ -77,6 +77,7 @@ Given the following video subtitles represented as a JSON array as shown below:
 
 Your job is trying to generate the subtitles' outlines from top to bottom,
 and extract useful information from each outline context;
+each useful information should end with a period;
 exclude the introduction at the beginning and the conclusion at the end;
 exclude text like "[Music]", "[Applause]", "[Laughter]" and so on.
 
