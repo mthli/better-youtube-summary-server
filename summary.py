@@ -17,92 +17,92 @@ from openai import Model, Role, TokenLimit, \
     get_content
 from sse import SseEvent, sse_publish
 
+# For more than 10 mins video such as https://www.youtube.com/watch?v=aTf7AMVOoDY,
+# or more than 30 mins video such as https://www.youtube.com/watch?v=WRLVrfIBS1k.
 _GENERATE_ONE_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
+# Looks like use the word "outline" is better than the work "chapter".
 _GENERATE_ONE_CHAPTER_SYSTEM_PROMPT = '''
-Given the following content, trying to generate its chapter.
-
-The content is a piece of video subtitles represented as a JSON array,
-the format of the JSON array elements is as follows:
+Given the following video subtitles represented as a JSON array as shown below:
 
 ```json
-{{
-  "index":   int field, the subtitle line index.
-  "seconds": int field, the subtitle start time in seconds.
-  "text": string field, the subtitle text itself.
-}}
+[
+  {{
+    "index": int field, the subtitle line index.
+    "start": int field, the subtitle start time in seconds.
+    "text": string field, the subtitle text itself.
+  }}
+]
 ```
 
-Your job is trying to generate the chapter of the content,
-you should take the first obvious context from top to bottom as the chapter,
-ignore out-of-context parts and irrelevant parts;
-ignore text like "[Music]", "[Applause]", "[Laughter]" and so on.
+Your job is trying to generate the subtitles' outline with follow steps:
+
+1. Extract useful information as the outline context,
+2. exclude out-of-context parts and irrelevant parts,
+3. exclude text like "[Music]", "[Applause]", "[Laughter]" and so on.
 
 Return a JSON object containing the following fields:
 
 ```json
 {{
-  "chapter": string field, give a brief title of the chapter context in language "{lang}".
-  "seconds": int field, the start time of the chapter in seconds, must >= {start_time}.
-  "timestamp": string field, the start time of the chapter in "HH:mm:ss" format.
-  "end_at":  int field, the chapter context end at which line index.
+  "end_at": int field, the outline context end at which subtitle index.
+  "start": int field, the start time of the outline context in seconds, must >= {start_time}.
+  "timestamp": string field, the start time of the outline context in "HH:mm:ss" format.
+  "outline": string field, a brief outline title in language "{lang}".
 }}
 ```
 
-The output **MUST** be a JSON object.
-Do not output any redundant explanation or information.
+Do not output any redundant explanation other than JSON.
 '''
 
 # For 5 mins video such as https://www.youtube.com/watch?v=tCBknJLD4qY,
 # or 10 mins video such as https://www.youtube.com/watch?v=QKOd8TDptt0.
-_GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 768  # nopep8, 3328.
+_GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
+# Looks like use the word "outline" is better than the work "chapter".
 _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT = '''
-Given the following content,
-trying to generate its outlines and extract useful information from each outline context.
-
-The content is a video subtitles represented as a JSON array,
-the format of the JSON array elements is as follows:
+Given the following video subtitles represented as a JSON array as shown below:
 
 ```json
-{{
-  "start": int field, the subtitle start time in seconds.
-  "text": string field, the subtitle text itself.
-}}
+[
+  {{
+    "start": int field, the subtitle start time in seconds.
+    "text": string field, the subtitle text itself.
+  }}
+]
 ```
 
-Your job is trying to generate the outlines of the content from top to bottom,
+Your job is trying to generate the subtitles' outlines from top to bottom,
 and extract useful information from each outline context;
-ignore the introduction at the beginning and the conclusion at the end;
-ignore text like "[Music]", "[Applause]", "[Laughter]" and so on.
+exclude the introduction at the beginning and the conclusion at the end;
+exclude text like "[Music]", "[Applause]", "[Laughter]" and so on.
 
 Return a JSON array as shown below:
 
 ```json
 [
   {{
-    "outline": string field, give a brief title of the outline context in language "{lang}".
-    "information": string field, an useful information in the outline context clear and accurate.
+    "outline": string field, a brief outline title in language "{lang}".
+    "information": string field, an useful information in the outline context in language "{lang}".
     "start": int field, the start time of the outline in seconds.
     "timestamp": string field, the start time of the outline in "HH:mm:ss" format.
   }}
 ]
 ```
 
-The output **MUST** be a JSON object.
-Do not output any redundant explanation or information.
+Do not output any redundant explanation other than JSON.
 '''
 
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
-_SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 7 / 8  # nopep8, 3584.
+_SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
 Given the following content, please summarize and list the most important points of it.
 
-The content is a piece of video subtitles, consists of many lines, and its topic is about "{chapter}".
+The content is a piece of video subtitles, consists of many lines, and its outline is about "{chapter}".
 The format of each line is like `[text...]`, for example `[hello, world]`.
 
 The output format should be a markdown bullet list, and each bullet point should end with a period.
 The output language should be "{lang}" in ISO 639-1.
 
-Please ignore line like "[Music]", "[Applause]", "[Laughter]" and so on.
+Please exclude line like "[Music]", "[Applause]", "[Laughter]" and so on.
 Please merge similar viewpoints before the final output.
 Please keep the output clear and accurate.
 
@@ -121,7 +121,7 @@ We have provided an existing bullet list summary up to a certain point:
 
 We have the opportunity to refine the existing summary (only if needed) with some more content.
 
-The content is a piece of video subtitles, consists of many lines, and its topic is about "{chapter}".
+The content is a piece of video subtitles, consists of many lines, and its outline is about "{chapter}".
 The format of each line is like `[text...]`, for example `[hello world]`.
 
 Your job is trying to refine the existing bullet list summary (only if needed) with the given content.
@@ -130,7 +130,7 @@ If the the given content isn't useful or doesn't make sense, don't refine the th
 The output format should be a markdown bullet list, and each bullet point should end with a period.
 The output language should be "{lang}" in ISO 639-1.
 
-Please ignore line like "[Music]", "[Applause]", "[Laughter]" and so on.
+Please exclude line like "[Music]", "[Applause]", "[Laughter]" and so on.
 Please merge similar viewpoints before the final output.
 Please keep the output clear and accurate.
 
@@ -299,23 +299,23 @@ async def _generate_multi_chapters(
     system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
     system_message = build_message(Role.SYSTEM, system_prompt)
     chapters: list[Chapter] = []
-    content = ''
+    content: list[dict] = []
 
     for t in timed_texts:
         text = t.text.strip()
         if not text:
             continue
-
-        temp = json.dumps({
+        content.append({
             'start': int(t.start),
             'text': text,
-        }, ensure_ascii=False)
+        })
 
-        content = content + '\n' + temp if content else temp
+    user_message = build_message(
+        role=Role.USER,
+        content=json.dumps(content, ensure_ascii=False),
+    )
 
-    user_message = build_message(Role.USER, content)
     messages = [system_message, user_message]
-
     tokens = count_tokens(messages)
     if tokens >= _GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT:
         logger.info(f'generate multi chapters, reach token limit, vid={vid}, tokens={tokens}')  # nopep8.
@@ -380,30 +380,32 @@ async def _generate_chapters_one_by_one(
                         f'timed_texts_start={timed_texts_start}')
             break  # drained.
 
-        content = ''
-        start_time = int(texts[0].start)
         system_prompt = _GENERATE_ONE_CHAPTER_SYSTEM_PROMPT.format(
-            start_time=start_time,
+            start_time=int(texts[0].start),
             lang=lang,
         )
         system_message = build_message(Role.SYSTEM, system_prompt)
 
+        content: list[dict] = []
         for t in texts:
             text = t.text.strip()
             if not text:
                 continue
 
-            temp = json.dumps({
+            temp = content.copy()
+            temp.append({
                 'index': timed_texts_start,
-                'seconds': int(t.start),
+                'start': int(t.start),
                 'text': text,
-            }, ensure_ascii=False)
+            })
 
-            temp = content + '\n' + temp if content else temp
-            user_message = build_message(Role.USER, temp)
+            user_message = build_message(
+                role=Role.USER,
+                content=json.dumps(temp, ensure_ascii=False),
+            )
 
             if count_tokens([system_message, user_message]) < _GENERATE_ONE_CHAPTER_TOKEN_LIMIT:
-                content = temp.strip()
+                content = temp
                 timed_texts_start += 1
             else:
                 break  # for.
@@ -413,7 +415,10 @@ async def _generate_chapters_one_by_one(
                     f'latest_end_at={latest_end_at}, '
                     f'timed_texts_start={timed_texts_start}')
 
-        user_message = build_message(Role.USER, content)
+        user_message = build_message(
+            role=Role.USER,
+            content=json.dumps(content, ensure_ascii=False),
+        )
         body = await chat(
             messages=[system_message, user_message],
             model=Model.GPT_3_5_TURBO,
@@ -431,8 +436,8 @@ async def _generate_chapters_one_by_one(
             logger.warning(f'generate one chapter, json loads failed, vid={vid}')  # nopep8.
             res = {}
 
-        chapter = res.get('chapter', '').strip()
-        seconds = res.get('seconds', -1)
+        chapter = res.get('outline', '').strip()
+        seconds = res.get('start', -1)
         end_at = res.get('end_at')
 
         # Looks like it's the end and meanless, so ignore the chapter.
