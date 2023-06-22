@@ -1,3 +1,5 @@
+from typing import Optional
+
 from database.data import Translation
 from database.sqlite import commit, fetchall, sqlescape
 
@@ -43,3 +45,35 @@ def create_translation_table():
         CREATE INDEX IF NOT EXISTS idx_{_COLUMN_UPDATE_TIMESTAMP}
         ON {_TABLE} ({_COLUMN_UPDATE_TIMESTAMP})
         ''')
+
+
+def find_translation(vid: str, cid: str, lang: str) -> Optional[Translation]:
+    res = fetchall(f'''
+        SELECT
+              {_COLUMN_VID},
+              {_COLUMN_CID},
+              {_COLUMN_LANG},
+              {_COLUMN_CHAPTER},
+              {_COLUMN_SUMMARY}
+         FROM {_TABLE}
+        WHERE {_COLUMN_VID}  = '{sqlescape(vid)}'
+          AND {_COLUMN_CID}  = '{sqlescape(cid)}'
+          AND {_COLUMN_LANG} = '{sqlescape(lang)}'
+        LIMIT 1
+        ''')
+
+    if not res:
+        return None
+
+    res = res[0]
+    return Translation(
+        vid=res[0],
+        cid=res[1],
+        lang=res[2],
+        chapter=res[3],
+        summary=res[4],
+    )
+
+
+def insert_or_update_translation(translation: Translation):
+    pass
