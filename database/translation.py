@@ -76,4 +76,36 @@ def find_translation(vid: str, cid: str, lang: str) -> Optional[Translation]:
 
 
 def insert_or_update_translation(translation: Translation):
-    pass
+    previous = find_translation(
+        vid=translation.vid,
+        cid=translation.cid,
+        lang=translation.lang,
+    )
+    if not previous:
+        commit(f'''
+            INSERT INTO {_TABLE} (
+                {_COLUMN_VID},
+                {_COLUMN_CID},
+                {_COLUMN_LANG},
+                {_COLUMN_CHAPTER},
+                {_COLUMN_SUMMARY}
+            ) VALUES (
+                '{sqlescape(translation.vid)}',
+                '{sqlescape(translation.cid)}',
+                '{sqlescape(translation.lang)}',
+                '{sqlescape(translation.chapter)}',
+                '{sqlescape(translation.summary)}',
+                STRFTIME('%s', 'NOW'),
+                STRFTIME('%s', 'NOW')
+            )
+            ''')
+    else:
+        commit(f'''
+            UPDATE {_TABLE}
+               SET {_COLUMN_CHAPTER} = '{sqlescape(translation.chapter)}',
+                   {_COLUMN_SUMMARY} = '{sqlescape(translation.summary)}',
+                   {_COLUMN_UPDATE_TIMESTAMP} = STRFTIME('%s', 'NOW')
+             WHERE {_COLUMN_VID}  = '{sqlescape(translation.vid)}'
+               AND {_COLUMN_CID}  = '{sqlescape(translation.cid)}'
+               AND {_COLUMN_LANG} = '{sqlescape(translation.lang)}'
+            ''')
