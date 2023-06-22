@@ -109,3 +109,10 @@ def insert_or_update_translation(translation: Translation):
                AND {_COLUMN_CID}  = '{sqlescape(translation.cid)}'
                AND {_COLUMN_LANG} = '{sqlescape(translation.lang)}'
             ''')
+
+
+def delete_translation(vid: str):
+    commit(f'''
+        DELETE FROM {_TABLE}
+        WHERE {_COLUMN_VID} = '{sqlescape(vid)}'
+        ''')
