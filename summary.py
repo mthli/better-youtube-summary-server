@@ -154,6 +154,7 @@ def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
         'ko',  # Korean.
         'zh-Hans',  # Chinese (Simplified).
         'zh-Hant',  # Chinese (Traditional).
+        'zh',  # Chinese.
         'ar',  # Arabic.
         'id',  # Indonesian.
         'fr',  # French.
