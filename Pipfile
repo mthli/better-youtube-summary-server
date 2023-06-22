@@ -16,7 +16,6 @@ quart = "*"
 hypercorn = "*"
 arq = "*"
 youtube-transcript-api = "*"
-deepl = "*"
 
 [dev-packages]
 autopep8 = "*"

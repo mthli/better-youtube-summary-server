@@ -3,6 +3,7 @@ from uuid import uuid4
 from arq import create_pool
 from arq.connections import RedisSettings
 from arq.typing import WorkerSettingsBase
+from langcodes import Language
 from quart import Quart, Response, abort, json, request, make_response
 from werkzeug.datastructures import Headers
 from werkzeug.exceptions import HTTPException
@@ -114,6 +115,33 @@ async def feedback(vid: str):
 
     insert_or_update_feedback(feedback)
     return {}
+
+
+# {
+#   'lang': str, required.
+# }
+@app.post('/api/translate/<string:vid>')
+async def translate(vid: str):
+    try:
+        body: dict = await request.get_json() or {}
+    except Exception as e:
+        abort(400, f'translate failed, e={e}')
+
+    lang = body.get('lang', '')
+    if not isinstance(lang, str):
+        abort(400, f'"lang" must be string')
+    lang = lang.strip()
+    if not lang:
+        abort(400, f'"lang" must not empty')
+    lang = Language.get(lang)  # LanguageTagError.
+    if not lang.is_valid():
+        abort(400, f'"lang" invalid')
+
+    found = find_chapters_by_vid(vid)
+    if not found:
+        return {}
+
+    # TODO
 
 
 # {
