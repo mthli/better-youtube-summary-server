@@ -31,11 +31,10 @@ class ChapterStyle(StrEnum):
 
 
 @dataclass
-class TimedText:
-    start: float = 0     # required; in seconds.
-    duration: float = 0  # required; in seconds.
-    lang: str = 'en'     # required; language code.
-    text: str = ''       # required.
+class Feedback:
+    vid: str = ''  # required.
+    good: int = 0  # optional; always >= 0.
+    bad: int = 0   # optional; always >= 0.
 
 
 @unique
@@ -46,10 +45,11 @@ class SummaryState(StrEnum):
 
 
 @dataclass
-class Feedback:
-    vid: str = ''  # required.
-    good: int = 0  # optional; always >= 0.
-    bad: int = 0   # optional; always >= 0.
+class TimedText:
+    start: float = 0     # required; in seconds.
+    duration: float = 0  # required; in seconds.
+    lang: str = 'en'     # required; language code.
+    text: str = ''       # required.
 
 
 @dataclass
