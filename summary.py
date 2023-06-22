@@ -94,9 +94,10 @@ Do not output any redundant explanation other than JSON.
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
-Given the following content, please summarize and list the most important points of it.
+Given the following video subtitles, its outline is about "{chapter}".
+Please summarize and list the most important points of the subtitles.
 
-The content is a piece of video subtitles, consists of many lines, and its outline is about "{chapter}".
+The subtitles consists of many lines.
 The format of each line is like `[text...]`, for example `[hello, world]`.
 
 The output format should be a markdown bullet list, and each bullet point should end with a period.
@@ -121,8 +122,8 @@ We have provided an existing bullet list summary up to a certain point:
 
 We have the opportunity to refine the existing summary (only if needed) with some more content.
 
-The content is a piece of video subtitles, consists of many lines, and its outline is about "{chapter}".
-The format of each line is like `[text...]`, for example `[hello world]`.
+The content is a part of video subtitles, consists of many lines, and its outline is about "{chapter}".
+The format of each line is like `[text...]`, for example `[hello, world]`.
 
 Your job is trying to refine the existing bullet list summary (only if needed) with the given content.
 If the the given content isn't useful or doesn't make sense, don't refine the the existing summary.
