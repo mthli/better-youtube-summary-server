@@ -7,7 +7,12 @@ from uuid import uuid4
 from quart import abort
 from youtube_transcript_api import YouTubeTranscriptApi
 
-from database.data import Chapter, Slicer, SummaryState, TimedText, \
+from database.data import \
+    Chapter, \
+    ChapterSlicer, \
+    ChapterStyle, \
+    SummaryState, \
+    TimedText, \
     build_summary_response
 from logger import logger
 from openai import Model, Role, TokenLimit, \
@@ -278,7 +283,8 @@ def _parse_chapters(
                 cid=str(uuid4()),
                 vid=vid,
                 trigger=trigger,
-                slicer=Slicer.YOUTUBE.value,
+                slicer=ChapterSlicer.YOUTUBE.value,
+                style=ChapterStyle.MARKDOWN.value,
                 start=seconds,
                 lang=lang,
                 chapter=c['title'],
@@ -351,7 +357,8 @@ async def _generate_multi_chapters(
                 cid=str(uuid4()),
                 vid=vid,
                 trigger=trigger,
-                slicer=Slicer.OPENAI.value,
+                slicer=ChapterSlicer.OPENAI.value,
+                style=ChapterStyle.TEXT.value,
                 start=seconds,
                 lang=lang,
                 chapter=chapter,
@@ -452,7 +459,8 @@ async def _generate_chapters_one_by_one(
                 cid=str(uuid4()),
                 vid=vid,
                 trigger=trigger,
-                slicer=Slicer.OPENAI.value,
+                slicer=ChapterSlicer.OPENAI.value,
+                style=ChapterStyle.MARKDOWN.value,
                 start=seconds,
                 lang=lang,
                 chapter=chapter,

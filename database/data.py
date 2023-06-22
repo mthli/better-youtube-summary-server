@@ -8,13 +8,26 @@ from strenum import StrEnum
 class Chapter:
     cid: str = ''      # required.
     vid: str = ''      # required.
-    trigger: str = ''  # required; uid, empty means unknown.
-    start: int = 0     # required.
+    trigger: str = ''  # required; uid.
     slicer: str = ''   # required.
-    lang: str = ''     # required; language code, empty means unknown.
+    style: str = ''    # required.
+    start: int = 0     # required; in seconds.
+    lang: str = ''     # required; language code.
     chapter: str = ''  # required.
     summary: str = ''  # optional.
     refined: int = 0   # optional.
+
+
+@unique
+class ChapterSlicer(StrEnum):
+    YOUTUBE = 'youtube'
+    OPENAI = 'openai'
+
+
+@unique
+class ChapterStyle(StrEnum):
+    MARKDOWN = 'markdown'
+    TEXT = 'text'
 
 
 @dataclass
@@ -23,12 +36,6 @@ class TimedText:
     duration: float = 0  # required; in seconds.
     lang: str = 'en'     # required; language code.
     text: str = ''       # required.
-
-
-@unique
-class Slicer(StrEnum):
-    YOUTUBE = 'youtube'
-    OPENAI = 'openai'
 
 
 @unique

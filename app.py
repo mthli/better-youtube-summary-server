@@ -16,8 +16,8 @@ from database.chapter import \
     delete_chapters_by_vid
 from database.data import \
     Chapter, \
+    ChapterSlicer, \
     Feedback, \
-    Slicer, \
     SummaryState, \
     TimedText, \
     User, \
@@ -135,7 +135,7 @@ async def summarize(vid: str):
 
     found = find_chapters_by_vid(vid)
     if found:
-        if (chapters and found[0].slicer != Slicer.YOUTUBE) or \
+        if (chapters and found[0].slicer != ChapterSlicer.YOUTUBE) or \
                 _check_found_need_to_resummarize(vid, found):
             logger.info(f'summarize, need to resummarize, vid={vid}')
             delete_chapters_by_vid(vid)        # 1 step.

@@ -8,6 +8,7 @@ _COLUMN_CID = 'cid'
 _COLUMN_VID = 'vid'
 _COLUMN_TRIGGER = 'trigger'  # uid.
 _COLUMN_SLICER = 'slicer'
+_COLUMN_STYLE = 'style'
 _COLUMN_START = 'start'  # in seconds.
 _COLUMN_LANG = 'lang'  # language code.
 _COLUMN_CHAPTER = 'chapter'
@@ -24,7 +25,8 @@ def create_chapter_table():
             {_COLUMN_VID}     TEXT NOT NULL DEFAULT '',
             {_COLUMN_TRIGGER} TEXT NOT NULL DEFAULT '',
             {_COLUMN_SLICER}  TEXT NOT NULL DEFAULT '',
-            {_COLUMN_START} INTEGER NOT NULL DEFAULT 0,
+            {_COLUMN_STYLE}   TEXT NOT NULL DEFAULT '',
+            {_COLUMN_START}   INTEGER NOT NULL DEFAULT 0,
             {_COLUMN_LANG}    TEXT NOT NULL DEFAULT '',
             {_COLUMN_CHAPTER} TEXT NOT NULL DEFAULT '',
             {_COLUMN_SUMMARY} TEXT NOT NULL DEFAULT '',
@@ -58,6 +60,7 @@ def find_chapters_by_vid(vid: str, limit: int = maxsize) -> list[Chapter]:
               {_COLUMN_VID},
               {_COLUMN_TRIGGER},
               {_COLUMN_SLICER},
+              {_COLUMN_STYLE},
               {_COLUMN_START},
               {_COLUMN_LANG},
               {_COLUMN_CHAPTER},
@@ -73,11 +76,12 @@ def find_chapters_by_vid(vid: str, limit: int = maxsize) -> list[Chapter]:
         vid=r[1],
         trigger=r[2],
         slicer=r[3],
-        start=r[4],
-        lang=r[5],
-        chapter=r[6],
-        summary=r[7],
-        refined=r[8],
+        style=r[4],
+        start=r[5],
+        lang=r[6],
+        chapter=r[7],
+        summary=r[8],
+        refined=r[9],
     ), res))
 
 
@@ -93,6 +97,7 @@ def _insert_chapter(chapter: Chapter):
             {_COLUMN_VID},
             {_COLUMN_TRIGGER},
             {_COLUMN_SLICER},
+            {_COLUMN_STYLE},
             {_COLUMN_START},
             {_COLUMN_LANG},
             {_COLUMN_CHAPTER},
@@ -105,6 +110,7 @@ def _insert_chapter(chapter: Chapter):
             '{sqlescape(chapter.vid)}',
             '{sqlescape(chapter.trigger)}',
             '{sqlescape(chapter.slicer)}',
+            '{sqlescape(chapter.style)}',
              {chapter.start},
             '{sqlescape(chapter.lang)}',
             '{sqlescape(chapter.chapter)}',
