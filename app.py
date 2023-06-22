@@ -27,6 +27,7 @@ from database.feedback import \
     find_feedback, \
     insert_or_update_feedback, \
     delete_feedback
+from database.translation import create_translation_table
 from database.user import create_user_table, find_user, insert_or_update_user
 from logger import logger
 from rds import rds
@@ -39,6 +40,7 @@ _NO_TRANSCRIPT_RDS_KEY_EX = 86400  # 24 hours.
 app = Quart(__name__)
 create_chapter_table()
 create_feedback_table()
+create_translation_table()
 create_user_table()
 
 

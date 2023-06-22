@@ -52,6 +52,14 @@ class TimedText:
     text: str = ''       # required.
 
 
+class Translation:
+    vid: str = ''      # required.
+    cid: str = ''      # required.
+    lang: str = ''     # required; language code.
+    chapter: str = ''  # required.
+    summary: str = ''  # required.
+
+
 @dataclass
 class User:
     uid: str = ''             # required.
