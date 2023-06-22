@@ -4,13 +4,12 @@ from enum import unique
 from strenum import StrEnum
 
 
-# FIXME (Matthew Lee) rename `seconds` to `start`
 @dataclass
 class Chapter:
     cid: str = ''      # required.
     vid: str = ''      # required.
     trigger: str = ''  # required; uid, empty means unknown.
-    seconds: int = 0   # required.
+    start: int = 0     # required.
     slicer: str = ''   # required.
     lang: str = ''     # required; language code, empty means unknown.
     chapter: str = ''  # required.

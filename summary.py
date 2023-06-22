@@ -227,8 +227,8 @@ async def summarize(
 
     tasks = []
     for i, c in enumerate(chapters):
-        start_time = c.seconds
-        end_time = chapters[i + 1].seconds if i + 1 < len(chapters) else maxsize  # nopep8.
+        start_time = c.start
+        end_time = chapters[i + 1].start if i + 1 < len(chapters) else maxsize  # nopep8.
         texts = _get_timed_texts_in_range(
             timed_texts=timed_texts,
             start_time=start_time,
@@ -279,7 +279,7 @@ def _parse_chapters(
                 vid=vid,
                 trigger=trigger,
                 slicer=Slicer.YOUTUBE.value,
-                seconds=seconds,
+                start=seconds,
                 lang=lang,
                 chapter=c['title'],
             ))
@@ -352,14 +352,14 @@ async def _generate_multi_chapters(
                 vid=vid,
                 trigger=trigger,
                 slicer=Slicer.OPENAI.value,
-                seconds=seconds,
+                start=seconds,
                 lang=lang,
                 chapter=chapter,
                 summary=information,
             ))
 
     # FIXME (Matthew Lee) prompt output may not sortd by seconds asc.
-    return sorted(chapters, key=lambda c: c.seconds)
+    return sorted(chapters, key=lambda c: c.start)
 
 
 async def _generate_chapters_one_by_one(
@@ -453,7 +453,7 @@ async def _generate_chapters_one_by_one(
                 vid=vid,
                 trigger=trigger,
                 slicer=Slicer.OPENAI.value,
-                seconds=seconds,
+                start=seconds,
                 lang=lang,
                 chapter=chapter,
             )

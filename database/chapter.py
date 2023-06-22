@@ -8,7 +8,7 @@ _COLUMN_CID = 'cid'
 _COLUMN_VID = 'vid'
 _COLUMN_TRIGGER = 'trigger'  # uid.
 _COLUMN_SLICER = 'slicer'
-_COLUMN_SECONDS = 'seconds'
+_COLUMN_START = 'start'  # in seconds.
 _COLUMN_LANG = 'lang'  # language code.
 _COLUMN_CHAPTER = 'chapter'
 _COLUMN_SUMMARY = 'summary'
@@ -24,7 +24,7 @@ def create_chapter_table():
             {_COLUMN_VID}     TEXT NOT NULL DEFAULT '',
             {_COLUMN_TRIGGER} TEXT NOT NULL DEFAULT '',
             {_COLUMN_SLICER}  TEXT NOT NULL DEFAULT '',
-            {_COLUMN_SECONDS} INTEGER NOT NULL DEFAULT 0,
+            {_COLUMN_START} INTEGER NOT NULL DEFAULT 0,
             {_COLUMN_LANG}    TEXT NOT NULL DEFAULT '',
             {_COLUMN_CHAPTER} TEXT NOT NULL DEFAULT '',
             {_COLUMN_SUMMARY} TEXT NOT NULL DEFAULT '',
@@ -58,14 +58,14 @@ def find_chapters_by_vid(vid: str, limit: int = maxsize) -> list[Chapter]:
               {_COLUMN_VID},
               {_COLUMN_TRIGGER},
               {_COLUMN_SLICER},
-              {_COLUMN_SECONDS},
+              {_COLUMN_START},
               {_COLUMN_LANG},
               {_COLUMN_CHAPTER},
               {_COLUMN_SUMMARY},
               {_COLUMN_REFINED}
          FROM {_TABLE}
         WHERE {_COLUMN_VID} = '{sqlescape(vid)}'
-        ORDER BY {_COLUMN_SECONDS} ASC
+        ORDER BY {_COLUMN_START} ASC
         LIMIT {limit}
         ''')
     return list(map(lambda r: Chapter(
@@ -73,7 +73,7 @@ def find_chapters_by_vid(vid: str, limit: int = maxsize) -> list[Chapter]:
         vid=r[1],
         trigger=r[2],
         slicer=r[3],
-        seconds=r[4],
+        start=r[4],
         lang=r[5],
         chapter=r[6],
         summary=r[7],
@@ -93,7 +93,7 @@ def _insert_chapter(chapter: Chapter):
             {_COLUMN_VID},
             {_COLUMN_TRIGGER},
             {_COLUMN_SLICER},
-            {_COLUMN_SECONDS},
+            {_COLUMN_START},
             {_COLUMN_LANG},
             {_COLUMN_CHAPTER},
             {_COLUMN_SUMMARY},
@@ -105,7 +105,7 @@ def _insert_chapter(chapter: Chapter):
             '{sqlescape(chapter.vid)}',
             '{sqlescape(chapter.trigger)}',
             '{sqlescape(chapter.slicer)}',
-             {chapter.seconds},
+             {chapter.start},
             '{sqlescape(chapter.lang)}',
             '{sqlescape(chapter.chapter)}',
             '{sqlescape(chapter.summary)}',
