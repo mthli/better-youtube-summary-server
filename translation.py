@@ -1,5 +1,8 @@
 import json
 
+from typing import Optional
+
+from langcodes import Language
 from quart import abort
 
 from database.chapter import find_chapter_by_cid
@@ -36,14 +39,20 @@ async def translate(
     cid: str,
     lang: str,
     openai_api_key: str = '',
-) -> Translation:
+) -> Optional[Translation]:
+    chapter = find_chapter_by_cid(cid)
+    if not chapter:
+        abort(404, f'translate, but chapter not found, vid={vid}, cid={cid}')  # nopep8.
+
+    # Avoid the same language.
+    la = Language.get(lang)
+    lb = Language.get(chapter.lang)
+    if la.language == lb.language:
+        return None
+
     trans = find_translation(vid=vid, cid=cid, lang=lang)
     if trans and trans.chapter and trans.summary:
         return trans
-
-    chapter = find_chapter_by_cid(cid)
-    if not chapter:
-        abort(404, f'translate, but chapter not found, vid={vid}, cid={cid}, lang={lang}')  # nopep8.
 
     system_prompt = _TRANSLATION_SYSTEM_PROMPT.format(lang=lang)
     system_message = build_message(Role.SYSTEM, system_prompt)

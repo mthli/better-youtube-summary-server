@@ -243,7 +243,7 @@ async def translate(vid: str):
         openai_api_key=openai_api_key,
     )
 
-    return asdict(trans)
+    return asdict(trans) if trans else {}
 
 
 def _parse_uid_from_headers(headers: Headers, check: bool = True) -> str:
