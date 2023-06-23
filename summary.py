@@ -41,22 +41,24 @@ Given the following video subtitles represented as a JSON array as shown below:
 
 Your job is trying to generate the subtitles' outline with follow steps:
 
-1. Extract useful information as the outline context,
+1. Extract an useful information as the outline context,
 2. exclude out-of-context parts and irrelevant parts,
-3. exclude text like "[Music]", "[Applause]", "[Laughter]" and so on.
+3. exclude text like "[Music]", "[Applause]", "[Laughter]" and so on,
+4. summarize the useful information to one-word as the outline title.
 
-Return a JSON object containing the following fields:
+Please return a JSON object as shown below:
 
 ```json
 {{
   "end_at": int field, the outline context end at which subtitle index.
   "start": int field, the start time of the outline context in seconds, must >= {start_time}.
   "timestamp": string field, the start time of the outline context in "HH:mm:ss" format.
-  "outline": string field, a brief outline title in language "{lang}".
+  "outline": string field, the outline title in language "{lang}".
 }}
 ```
 
-Do not output any redundant explanation other than JSON.
+Please output JSON only.
+Do not output any redundant explanation.
 '''
 
 # For 5 mins video such as https://www.youtube.com/watch?v=tCBknJLD4qY,
@@ -94,7 +96,8 @@ Return a JSON array as shown below:
 ]
 ```
 
-Do not output any redundant explanation other than JSON.
+Please output JSON only.
+Do not output any redundant explanation.
 '''
 
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
