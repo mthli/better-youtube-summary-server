@@ -14,12 +14,14 @@ from database.data import \
     ChapterStyle, \
     State, \
     TimedText
+from database.feedback import find_feedback
 from logger import logger
 from openai import Model, Role, TokenLimit, \
     build_message, \
     chat, \
     count_tokens, \
     get_content
+from rds import rds
 from sse import SseEvent, sse_publish
 
 # For more than 10 mins video such as https://www.youtube.com/watch?v=aTf7AMVOoDY,
@@ -27,7 +29,7 @@ from sse import SseEvent, sse_publish
 _GENERATE_ONE_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
 # Looks like use the word "outline" is better than the work "chapter".
 _GENERATE_ONE_CHAPTER_SYSTEM_PROMPT = '''
-Given the following video subtitles represented as a JSON array as shown below:
+Given a part of video subtitles JSON array as shown below:
 
 ```json
 [
@@ -77,8 +79,8 @@ Given the following video subtitles represented as a JSON array as shown below:
 ]
 ```
 
-Your job is trying to generate the subtitles' outlines from top to bottom,
-and extract useful information from each outline context;
+Please generate the subtitles' outlines from top to bottom,
+and extract an useful information from each outline context;
 each useful information should end with a period;
 exclude the introduction at the beginning and the conclusion at the end;
 exclude text like "[Music]", "[Applause]", "[Laughter]" and so on.
@@ -103,7 +105,7 @@ Do not output any redundant explanation.
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
 _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
 _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
-Given the following video subtitles, its outline is about "{chapter}".
+Given a part of video subtitles about "{chapter}".
 Please summarize and list the most important points of the subtitles.
 
 The subtitles consists of many lines.
@@ -131,10 +133,10 @@ We have provided an existing bullet list summary up to a certain point:
 
 We have the opportunity to refine the existing summary (only if needed) with some more content.
 
-The content is a part of video subtitles, consists of many lines, and its outline is about "{chapter}".
+The content is a part of video subtitles about "{chapter}", consists of many lines.
 The format of each line is like `[text...]`, for example `[hello, world]`.
 
-Your job is trying to refine the existing bullet list summary (only if needed) with the given content.
+Please refine the existing bullet list summary (only if needed) with the given content.
 If the the given content isn't useful or doesn't make sense, don't refine the the existing summary.
 
 The output format should be a markdown bullet list, and each bullet point should end with a period.
@@ -148,6 +150,9 @@ Do not output any redundant or irrelevant points.
 Do not output any redundant explanation or information.
 '''
 
+SUMMARIZING_RDS_KEY_EX = 300  # 5 mins.
+NO_TRANSCRIPT_RDS_KEY_EX = 8 * 60 * 60  # 8 hours.
+
 
 def build_summary_channel(vid: str) -> str:
     return f'summary_channel_{vid}'
@@ -159,6 +164,43 @@ def build_summary_response(state: State, chapters: list[Chapter] = []) -> dict:
         'state': state.value,
         'chapters': chapters,
     }
+
+
+def build_summarizing_rds_key(vid: str) -> str:
+    return f'summarizing_{vid}'
+
+
+def build_no_transcript_rds_key(vid: str) -> str:
+    return f'no_transcript_{vid}'
+
+
+async def do_if_found_chapters_in_database(vid: str, chapters: list[Chapter]):
+    rds.delete(build_no_transcript_rds_key(vid))
+    rds.delete(build_summarizing_rds_key(vid))
+    channel = build_summary_channel(vid)
+    data = build_summary_response(State.DONE, chapters)
+    await sse_publish(channel=channel, event=SseEvent.SUMMARY, data=data)
+    await sse_publish(channel=channel, event=SseEvent.CLOSE)
+
+
+def need_to_resummarize(vid: str, chapters: list[Chapter] = []) -> bool:
+    for c in chapters:
+        if (not c.summary) or len(c.summary) <= 0:
+            return True
+
+    feedback = find_feedback(vid)
+    if not feedback:
+        return False
+
+    good = feedback.good if feedback.good > 0 else 1
+    bad = feedback.bad if feedback.bad > 0 else 1
+
+    # DO NOTHING if total less then 10.
+    if good + bad < 10:
+        return False
+
+    # Need to resummarize if bad percent >= 20%
+    return bad / (good + bad) >= 0.2
 
 
 # NoTranscriptFound, TranscriptsDisabled...

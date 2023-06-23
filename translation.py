@@ -46,6 +46,10 @@ def build_translation_response(state: State, trans: list[Translation] = []) -> d
     }
 
 
+def build_translating_rds_key(vid: str) -> str:
+    return f'translating_{vid}'
+
+
 async def translate(
     vid: str,
     chapters: list[Chapter],

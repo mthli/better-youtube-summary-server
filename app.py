@@ -31,18 +31,22 @@ from database.translation import create_translation_table, delete_translation
 from database.user import create_user_table, find_user, insert_or_update_user
 from logger import logger
 from rds import rds
-from sse import SseEvent, sse_publish, sse_subscribe
+from sse import sse_subscribe
 from summary import \
+    SUMMARIZING_RDS_KEY_EX, \
+    NO_TRANSCRIPT_RDS_KEY_EX, \
     build_summary_channel, \
     build_summary_response, \
+    build_summarizing_rds_key, \
+    build_no_transcript_rds_key, \
+    do_if_found_chapters_in_database, \
+    need_to_resummarize, \
     parse_timed_texts_and_lang, \
     summarize as summarizing
 from translation import \
     build_translation_channel, \
+    build_translating_rds_key, \
     translate as translating
-
-_SUMMARIZE_RDS_KEY_EX = 300  # 5 mins.
-_NO_TRANSCRIPT_RDS_KEY_EX = 86400  # 24 hours.
 
 app = Quart(__name__)
 create_chapter_table()
@@ -124,6 +128,87 @@ async def feedback(vid: str):
 
 
 # {
+#   'chapters': dict, optional.
+#   'no_transcript': boolean, optional.
+# }
+@app.post('/api/summarize/<string:vid>')
+async def summarize(vid: str):
+    try:
+        body: dict = await request.get_json() or {}
+    except Exception as e:
+        abort(400, f'summarize failed, e={e}')
+
+    uid = _parse_uid_from_headers(request.headers)
+    openai_api_key = _parse_openai_api_key_from_headers(request.headers)
+    chapters = _parse_chapters_from_body(body)
+    no_transcript = bool(body.get('no_transcript', False))
+
+    no_transcript_rds_key = build_no_transcript_rds_key(vid)
+    summarizing_rds_key = build_summarizing_rds_key(vid)
+    channel = build_summary_channel(vid)
+
+    found = find_chapters_by_vid(vid)
+    if found:
+        if (chapters and found[0].slicer != ChapterSlicer.YOUTUBE) or \
+                need_to_resummarize(vid, found):
+            logger.info(f'summarize, need to resummarize, vid={vid}')
+            delete_chapters_by_vid(vid)
+            delete_feedback(vid)
+            delete_translation(vid)
+            rds.delete(no_transcript_rds_key)
+            rds.delete(summarizing_rds_key)
+        else:
+            logger.info(f'summarize, found chapters in database, vid={vid}')
+            await do_if_found_chapters_in_database(vid, found)
+            return build_summary_response(State.DONE, found)
+
+    if rds.exists(no_transcript_rds_key) or no_transcript:
+        logger.info(f'summarize, but no transcript for now, vid={vid}')
+        return build_summary_response(State.NOTHING)
+
+    if rds.exists(summarizing_rds_key):
+        logger.info(f'summarize, but repeated, vid={vid}')
+        # rds.set(summarizing_rds_key, 1, ex=SUMMARIZING_RDS_KEY_EX)
+        return await _build_sse_response(channel)
+
+    # Set the summary proccess beginning flag here,
+    # because of we need to get the transcript first,
+    # and try to avoid youtube rate limits.
+    rds.set(summarizing_rds_key, 1, ex=SUMMARIZING_RDS_KEY_EX)
+
+    try:
+        # FIXME (Matthew Lee) youtube rate limits?
+        timed_texts, lang = parse_timed_texts_and_lang(vid)
+        if not timed_texts:
+            logger.warning(f'summarize, but no transcript found, vid={vid}')
+            rds.set(no_transcript_rds_key, 1, ex=NO_TRANSCRIPT_RDS_KEY_EX)
+            rds.delete(summarizing_rds_key)
+            return build_summary_response(State.NOTHING)
+    except (NoTranscriptFound, TranscriptsDisabled):
+        logger.warning(f'summarize, but no transcript found, vid={vid}')
+        rds.set(no_transcript_rds_key, 1, ex=NO_TRANSCRIPT_RDS_KEY_EX)
+        rds.delete(summarizing_rds_key)
+        return build_summary_response(State.NOTHING)
+    except Exception:
+        logger.exception(f'summarize failed, vid={vid}')
+        rds.delete(no_transcript_rds_key)
+        rds.delete(summarizing_rds_key)
+        raise  # to errorhandler.
+
+    await app.arq.enqueue_job(
+        do_summarize_job.__name__,
+        vid,
+        uid,
+        chapters,
+        timed_texts,
+        lang,
+        openai_api_key,
+    )
+
+    return await _build_sse_response(channel)
+
+
+# {
 #   'lang': str, required.
 # }
 @app.post('/api/translate/<string:vid>')
@@ -159,87 +244,6 @@ async def translate(vid: str):
     )
 
     channel = build_translation_channel(vid)
-    return await _build_sse_response(channel)
-
-
-# {
-#   'chapters': dict, optional.
-#   'no_transcript': boolean, optional.
-# }
-@app.post('/api/summarize/<string:vid>')
-async def summarize(vid: str):
-    try:
-        body: dict = await request.get_json() or {}
-    except Exception as e:
-        abort(400, f'summarize failed, e={e}')
-
-    uid = _parse_uid_from_headers(request.headers)
-    openai_api_key = _parse_openai_api_key_from_headers(request.headers)
-    chapters = _parse_chapters_from_body(body)
-    no_transcript = bool(body.get('no_transcript', False))
-
-    no_transcript_rds_key = _build_no_transcript_rds_key(vid)
-    summarize_rds_key = _build_summarize_rds_key(vid)
-    channel = build_summary_channel(vid)
-
-    found = find_chapters_by_vid(vid)
-    if found:
-        if (chapters and found[0].slicer != ChapterSlicer.YOUTUBE) or \
-                _check_found_need_to_resummarize(vid, found):
-            logger.info(f'summarize, need to resummarize, vid={vid}')
-            delete_chapters_by_vid(vid)
-            delete_feedback(vid)
-            delete_translation(vid)
-            rds.delete(no_transcript_rds_key)
-            rds.delete(summarize_rds_key)
-        else:
-            logger.info(f'summarize, found chapters in database, vid={vid}')
-            await _do_if_found_chapters_in_database(vid, found)
-            return build_summary_response(State.DONE, found)
-
-    if rds.exists(no_transcript_rds_key) or no_transcript:
-        logger.info(f'summarize, but no transcript for now, vid={vid}')
-        return build_summary_response(State.NOTHING)
-
-    if rds.exists(summarize_rds_key):
-        logger.info(f'summarize, but repeated, vid={vid}')
-        rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
-        return await _build_sse_response(channel)
-
-    # Set the summary proccess beginning flag here,
-    # because of we need to get the transcript first,
-    # and try to avoid youtube rate limits.
-    rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
-
-    try:
-        # FIXME (Matthew Lee) youtube rate limits?
-        timed_texts, lang = parse_timed_texts_and_lang(vid)
-        if not timed_texts:
-            logger.warning(f'summarize, but no transcript found, vid={vid}')
-            rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
-            rds.delete(summarize_rds_key)
-            return build_summary_response(State.NOTHING)
-    except (NoTranscriptFound, TranscriptsDisabled):
-        logger.warning(f'summarize, but no transcript found, vid={vid}')
-        rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
-        rds.delete(summarize_rds_key)
-        return build_summary_response(State.NOTHING)
-    except Exception:
-        logger.exception(f'summarize failed, vid={vid}')
-        rds.delete(no_transcript_rds_key)
-        rds.delete(summarize_rds_key)
-        raise  # to errorhandler.
-
-    await app.arq.enqueue_job(
-        do_summarize_job.__name__,
-        vid,
-        uid,
-        chapters,
-        timed_texts,
-        lang,
-        openai_api_key,
-    )
-
     return await _build_sse_response(channel)
 
 
@@ -280,26 +284,6 @@ def _parse_chapters_from_body(body: dict) -> list[dict]:
     return chapters
 
 
-def _check_found_need_to_resummarize(vid: str, found: list[Chapter] = []) -> bool:
-    for f in found:
-        if (not f.summary) or len(f.summary) <= 0:
-            return True
-
-    feedback = find_feedback(vid)
-    if not feedback:
-        return False
-
-    good = feedback.good if feedback.good > 0 else 1
-    bad = feedback.bad if feedback.bad > 0 else 1
-
-    # DO NOTHING if total less then 10.
-    if good + bad < 10:
-        return False
-
-    # Need to resummarize if bad percent >= 20%
-    return bad / (good + bad) >= 0.2
-
-
 # ctx is arq first param, keep it.
 async def do_on_arq_worker_startup(ctx: dict):
     logger.info(f'arq worker startup')
@@ -308,18 +292,6 @@ async def do_on_arq_worker_startup(ctx: dict):
 # ctx is arq first param, keep it.
 async def do_on_arq_worker_shutdown(ctx: dict):
     logger.info(f'arq worker shutdown')
-
-
-# ctx is arq first param, keep it.
-async def do_translate_job(
-    ctx: dict,
-    vid: str,
-    chapters: list[Chapter],
-    language: Language,
-    openai_api_key: str = '',
-):
-    logger.info(f'do translate job, vid={vid}')
-    # TODO
 
 
 # ctx is arq first param, keep it.
@@ -335,8 +307,8 @@ async def do_summarize_job(
     logger.info(f'do summarize job, vid={vid}')
 
     # Set flag again, although we have done this before.
-    summarize_rds_key = _build_summarize_rds_key(vid)
-    rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
+    summarizing_rds_key = build_summarizing_rds_key(vid)
+    rds.set(summarizing_rds_key, 1, ex=SUMMARIZING_RDS_KEY_EX)
 
     chapters, has_exception = await summarizing(
         vid=vid,
@@ -354,16 +326,20 @@ async def do_summarize_job(
         delete_translation(vid)
         insert_chapters(chapters)
 
-    rds.delete(_build_no_transcript_rds_key(vid))
-    rds.delete(summarize_rds_key)
+    rds.delete(build_no_transcript_rds_key(vid))
+    rds.delete(summarizing_rds_key)
 
 
-def _build_summarize_rds_key(vid: str) -> str:
-    return f'summarize_{vid}'
-
-
-def _build_no_transcript_rds_key(vid: str) -> str:
-    return f'no_transcript_{vid}'
+# ctx is arq first param, keep it.
+async def do_translate_job(
+    ctx: dict,
+    vid: str,
+    chapters: list[Chapter],
+    language: Language,
+    openai_api_key: str = '',
+):
+    logger.info(f'do translate job, vid={vid}')
+    # TODO
 
 
 # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
@@ -382,17 +358,8 @@ async def _build_sse_response(channel: str) -> Response:
     return res
 
 
-async def _do_if_found_chapters_in_database(vid: str, found: list[Chapter]):
-    rds.delete(_build_no_transcript_rds_key(vid))
-    rds.delete(_build_summarize_rds_key(vid))
-    channel = build_summary_channel(vid)
-    data = build_summary_response(State.DONE, found)
-    await sse_publish(channel=channel, event=SseEvent.SUMMARY, data=data)
-    await sse_publish(channel=channel, event=SseEvent.CLOSE)
-
-
 # https://arq-docs.helpmanual.io/#simple-usage
 class WorkerSettings(WorkerSettingsBase):
-    functions = [do_summarize_job]
+    functions = [do_summarize_job, do_translate_job]
     on_startup = do_on_arq_worker_startup
     on_shutdown = do_on_arq_worker_shutdown
