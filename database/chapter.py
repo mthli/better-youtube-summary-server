@@ -1,10 +1,11 @@
 from sys import maxsize
+from typing import Optional
 
 from database.data import Chapter
 from database.sqlite import commit, fetchall, sqlescape
 
 _TABLE = 'chapter'
-_COLUMN_CID = 'cid'
+_COLUMN_CID = 'cid'  # UUID.
 _COLUMN_VID = 'vid'
 _COLUMN_TRIGGER = 'trigger'  # uid.
 _COLUMN_SLICER = 'slicer'
@@ -51,6 +52,42 @@ def create_chapter_table():
         CREATE INDEX IF NOT EXISTS idx_{_COLUMN_UPDATE_TIMESTAMP}
         ON {_TABLE} ({_COLUMN_UPDATE_TIMESTAMP})
         ''')
+
+
+def find_chapter_by_cid(cid: str) -> Optional[Chapter]:
+    res = fetchall(f'''
+        SELECT
+              {_COLUMN_CID},
+              {_COLUMN_VID},
+              {_COLUMN_TRIGGER},
+              {_COLUMN_SLICER},
+              {_COLUMN_STYLE},
+              {_COLUMN_START},
+              {_COLUMN_LANG},
+              {_COLUMN_CHAPTER},
+              {_COLUMN_SUMMARY},
+              {_COLUMN_REFINED}
+         FROM {_TABLE}
+        WHERE {_COLUMN_CID} = '{sqlescape(cid)}'
+        LIMIT 1
+        ''')
+
+    if not res:
+        return None
+
+    res = res[0]
+    return Chapter(
+        cid=res[0],
+        vid=res[1],
+        trigger=res[2],
+        slicer=res[3],
+        style=res[4],
+        start=res[5],
+        lang=res[6],
+        chapter=res[7],
+        summary=res[8],
+        refined=res[9],
+    )
 
 
 def find_chapters_by_vid(vid: str, limit: int = maxsize) -> list[Chapter]:

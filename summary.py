@@ -390,23 +390,23 @@ async def _generate_multi_chapters(
         logger.info(f'generate multi chapters, reach token limit, vid={vid}, tokens={tokens}')  # nopep8.
         return chapters
 
-    body = await chat(
-        messages=messages,
-        model=Model.GPT_3_5_TURBO,
-        top_p=0.1,
-        timeout=90,
-        api_key=openai_api_key,
-    )
-
-    content = get_content(body)
-    logger.info(f'generate multi chapters, vid={vid}, content=\n{content}')
-
-    # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
     try:
+        body = await chat(
+            messages=messages,
+            model=Model.GPT_3_5_TURBO,
+            top_p=0.1,
+            timeout=90,
+            api_key=openai_api_key,
+        )
+
+        content = get_content(body)
+        logger.info(f'generate multi chapters, vid={vid}, content=\n{content}')
+
+        # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
         res: list[dict] = json.loads(content)
     except Exception:
-        logger.warning(f'generate multi chapters, json loads failed, vid={vid}')  # nopep8.
-        res = []
+        logger.exception(f'generate multi chapters failed, vid={vid}')
+        return chapters
 
     for r in res:
         chapter = r.get('outline', '').strip()
@@ -480,31 +480,33 @@ async def _generate_chapters_one_by_one(
             else:
                 break  # for.
 
+        user_message = build_message(
+            role=Role.USER,
+            content=json.dumps(content, ensure_ascii=False),
+        )
+
         logger.info(f'generate one chapter, '
                     f'vid={vid}, '
                     f'latest_end_at={latest_end_at}, '
                     f'timed_texts_start={timed_texts_start}')
 
-        user_message = build_message(
-            role=Role.USER,
-            content=json.dumps(content, ensure_ascii=False),
-        )
-        body = await chat(
-            messages=[system_message, user_message],
-            model=Model.GPT_3_5_TURBO,
-            top_p=0.1,
-            timeout=90,
-            api_key=openai_api_key,
-        )
-        content = get_content(body)
-        logger.info(f'generate one chapter, vid={vid}, content=\n{content}')
-
-        # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
         try:
+            body = await chat(
+                messages=[system_message, user_message],
+                model=Model.GPT_3_5_TURBO,
+                top_p=0.1,
+                timeout=90,
+                api_key=openai_api_key,
+            )
+
+            content = get_content(body)
+            logger.info(f'generate one chapter, vid={vid}, content=\n{content}')  # nopep8.
+
+            # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
             res: dict = json.loads(content)
         except Exception:
-            logger.warning(f'generate one chapter, json loads failed, vid={vid}')  # nopep8.
-            res = {}
+            logger.exception(f'generate one chapter failed, vid={vid}')
+            break  # drained.
 
         chapter = res.get('outline', '').strip()
         seconds = res.get('start', -1)

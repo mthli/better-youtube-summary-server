@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from uuid import uuid4
 
 from arq import create_pool
@@ -43,11 +44,7 @@ from summary import \
     need_to_resummarize, \
     parse_timed_texts_and_lang, \
     summarize as summarizing
-from translation import \
-    TRANSLATING_RDS_KEY_EX, \
-    build_translation_channel, \
-    build_translating_rds_key, \
-    translate as translating
+from translation import translate as translating
 
 app = Quart(__name__)
 create_chapter_table()
@@ -209,6 +206,7 @@ async def summarize(vid: str):
 
 
 # {
+#   'cid':  str, required.
 #   'lang': str, required.
 # }
 @app.post('/api/translate/<string:vid>')
@@ -221,6 +219,13 @@ async def translate(vid: str):
     except Exception as e:
         abort(400, f'translate failed, e={e}')
 
+    cid = body.get('cid', '')
+    if not isinstance(cid, str):
+        abort(400, f'"cid" must be string')
+    cid = cid.strip()
+    if not cid:
+        abort(400, f'"cid" must not empty')
+
     lang = body.get('lang', '')
     if not isinstance(lang, str):
         abort(400, f'"lang" must be string')
@@ -232,27 +237,14 @@ async def translate(vid: str):
         abort(400, f'"lang" invalid')
     lang = lang.language  # to str.
 
-    found = find_chapters_by_vid(vid)
-    if not found:
-        abort(404, f'chapters not exists, vid={vid}')
-
-    channel = build_translation_channel(vid, lang)
-    translating_rds_key = build_translating_rds_key(vid, lang)
-
-    if rds.exists(translating_rds_key):
-        logger.info(f'translate, but repeated, vid={vid}, lang={lang}')
-        return await _build_sse_response(channel)
-
-    rds.set(translating_rds_key, 1, ex=TRANSLATING_RDS_KEY_EX)
-    await app.arq.enqueue_job(
-        do_translate_job.__name__,
-        vid,
-        found,
-        lang,
-        openai_api_key,
+    trans = await translating(
+        vid=vid,
+        cid=cid,
+        lang=lang,
+        openai_api_key=openai_api_key,
     )
 
-    return await _build_sse_response(channel)
+    return asdict(trans)
 
 
 def _parse_uid_from_headers(headers: Headers, check: bool = True) -> str:
@@ -338,30 +330,6 @@ async def do_summarize_job(
     rds.delete(summarizing_rds_key)
 
 
-# ctx is arq first param, keep it.
-async def do_translate_job(
-    ctx: dict,
-    vid: str,
-    chapters: list[Chapter],
-    lang: str,
-    openai_api_key: str = '',
-):
-    logger.info(f'do translate job, vid={vid}, lang={lang}')
-
-    # Set flag again, although we have done this before.
-    translating_rds_key = build_translating_rds_key(vid, lang)
-    rds.set(translating_rds_key, 1, ex=TRANSLATING_RDS_KEY_EX)
-
-    await translating(
-        vid=vid,
-        chapters=chapters,
-        lang=lang,
-        openai_api_key=openai_api_key,
-    )
-
-    rds.delete(translating_rds_key)
-
-
 # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
 async def _build_sse_response(channel: str) -> Response:
     res = await make_response(
@@ -380,6 +348,6 @@ async def _build_sse_response(channel: str) -> Response:
 
 # https://arq-docs.helpmanual.io/#simple-usage
 class WorkerSettings(WorkerSettingsBase):
-    functions = [do_summarize_job, do_translate_job]
+    functions = [do_summarize_job]
     on_startup = do_on_arq_worker_startup
     on_shutdown = do_on_arq_worker_shutdown
