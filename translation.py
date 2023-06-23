@@ -3,8 +3,6 @@ import json
 
 from dataclasses import asdict
 
-from langcodes import Language
-
 from database.data import Chapter, State, Translation
 from database.translation import \
     find_translation, \
@@ -36,8 +34,8 @@ Do not output any redundant explanation other than JSON.
 TRANSLATING_RDS_KEY_EX = 300  # 5 mins.
 
 
-def build_translation_channel(vid: str) -> str:
-    return f'translation_channel_{vid}'
+def build_translation_channel(vid: str, lang: str) -> str:
+    return f'translation_channel_{vid}_{lang}'
 
 
 def build_translation_response(state: State, trans: list[Translation] = []) -> dict:
@@ -48,21 +46,20 @@ def build_translation_response(state: State, trans: list[Translation] = []) -> d
     }
 
 
-def build_translating_rds_key(vid: str) -> str:
-    return f'translating_{vid}'
+def build_translating_rds_key(vid: str, lang: str) -> str:
+    return f'translating_{vid}_{lang}'
 
 
 async def translate(
     vid: str,
     chapters: list[Chapter],
-    language: Language,
+    lang: str,
     openai_api_key: str = '',
 ):
     if not chapters:
         logger.warning(f'translate, but chapters are empty, vid={vid}')
         return
 
-    lang = language.language
     if not lang:
         logger.warning(f'translate, but lang not exists, vid={vid}')
         return
@@ -84,11 +81,10 @@ async def translate(
         elif isinstance(r, Exception):
             logger.error(f'translate, but has exception, vid={vid}, e={r}')
 
-    await _do_sse_publish(State.DONE, trans)
-    await sse_publish(
-        channel=build_translation_channel(vid),
-        event=SseEvent.CLOSE,
-    )
+    channel = build_translation_channel(vid, lang)
+    data = build_translation_response(State.DONE, trans)
+    await sse_publish(channel=channel, event=SseEvent.TRANSLATION, data=data)
+    await sse_publish(channel=channel, event=SseEvent.CLOSE)
 
 
 async def _translate_chapter(
@@ -98,10 +94,15 @@ async def _translate_chapter(
 ) -> Translation:
     vid = chapter.vid
     cid = chapter.cid
+    channel = build_translation_channel(vid, lang)
 
     found = find_translation(vid=vid, cid=cid, lang=lang)
     if found and found.chapter and found.summary:
-        await _do_sse_publish(State.DOING, [found])
+        await sse_publish(
+            channel=channel,
+            event=SseEvent.TRANSLATION,
+            data=build_translation_response(State.DOING, [found]),
+        )
         return found
 
     system_prompt = _TRANSLATION_SYSTEM_PROMPT.format(lang=lang)
@@ -150,13 +151,10 @@ async def _translate_chapter(
     )
 
     insert_or_update_translation(trans)
-    await _do_sse_publish(State.DOING, [trans])
-    return trans
-
-
-async def _do_sse_publish(state: State, trans: list[Translation]):
     await sse_publish(
-        channel=build_translation_channel(trans.vid),
+        channel=channel,
         event=SseEvent.TRANSLATION,
-        data=build_translation_response(state, trans),
+        data=build_translation_response(State.DOING, [trans]),
     )
+
+    return trans

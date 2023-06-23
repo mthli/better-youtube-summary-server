@@ -215,7 +215,6 @@ async def summarize(vid: str):
 async def translate(vid: str):
     _ = _parse_uid_from_headers(request.headers)
     openai_api_key = _parse_openai_api_key_from_headers(request.headers)
-    channel = build_translation_channel(vid)
 
     try:
         body: dict = await request.get_json() or {}
@@ -231,14 +230,17 @@ async def translate(vid: str):
     lang = Language.get(lang)  # LanguageTagError.
     if not lang.is_valid():
         abort(400, f'"lang" invalid')
+    lang = lang.language  # to str.
 
     found = find_chapters_by_vid(vid)
     if not found:
         abort(404, f'chapters not exists, vid={vid}')
 
-    translating_rds_key = build_translating_rds_key(vid)
+    channel = build_translation_channel(vid, lang)
+    translating_rds_key = build_translating_rds_key(vid, lang)
+
     if rds.exists(translating_rds_key):
-        logger.info(f'translate, but repeated, vid={vid}')
+        logger.info(f'translate, but repeated, vid={vid}, lang={lang}')
         return await _build_sse_response(channel)
 
     rds.set(translating_rds_key, 1, ex=TRANSLATING_RDS_KEY_EX)
@@ -341,19 +343,19 @@ async def do_translate_job(
     ctx: dict,
     vid: str,
     chapters: list[Chapter],
-    language: Language,
+    lang: str,
     openai_api_key: str = '',
 ):
-    logger.info(f'do translate job, vid={vid}')
+    logger.info(f'do translate job, vid={vid}, lang={lang}')
 
     # Set flag again, although we have done this before.
-    translating_rds_key = build_translating_rds_key(vid)
+    translating_rds_key = build_translating_rds_key(vid, lang)
     rds.set(translating_rds_key, 1, ex=TRANSLATING_RDS_KEY_EX)
 
     await translating(
         vid=vid,
         chapters=chapters,
-        language=language,
+        lang=lang,
         openai_api_key=openai_api_key,
     )
 
