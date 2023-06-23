@@ -13,8 +13,7 @@ from database.data import \
     ChapterSlicer, \
     ChapterStyle, \
     State, \
-    TimedText, \
-    build_summary_response
+    TimedText
 from logger import logger
 from openai import Model, Role, TokenLimit, \
     build_message, \
