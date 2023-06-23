@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import unique
 
 from strenum import StrEnum
@@ -38,7 +38,7 @@ class Feedback:
 
 
 @unique
-class SummaryState(StrEnum):
+class State(StrEnum):
     NOTHING = 'nothing'
     DOING = 'doing'
     DONE = 'done'
@@ -64,11 +64,3 @@ class Translation:
 class User:
     uid: str = ''             # required.
     is_deleted: bool = False  # optional.
-
-
-def build_summary_response(state: SummaryState, chapters: list[Chapter] = []) -> dict:
-    chapters = list(map(lambda c: asdict(c), chapters))
-    return {
-        'state': state.value,
-        'chapters': chapters,
-    }

@@ -19,10 +19,9 @@ from database.data import \
     Chapter, \
     ChapterSlicer, \
     Feedback, \
-    SummaryState, \
+    State, \
     TimedText, \
-    User, \
-    build_summary_response
+    User
 from database.feedback import \
     create_feedback_table, \
     find_feedback, \
@@ -33,7 +32,10 @@ from database.user import create_user_table, find_user, insert_or_update_user
 from logger import logger
 from rds import rds
 from sse import SseEvent, sse_publish, sse_subscribe
-from summary import parse_timed_texts_and_lang, summarize as summarizing
+from summary import \
+    build_summary_response, \
+    parse_timed_texts_and_lang, \
+    summarize as summarizing
 
 _SUMMARIZE_RDS_KEY_EX = 300  # 5 mins.
 _NO_TRANSCRIPT_RDS_KEY_EX = 86400  # 24 hours.
@@ -176,11 +178,11 @@ async def summarize(vid: str):
         else:
             logger.info(f'summarize, found chapters in database, vid={vid}')
             await _do_if_found_chapters_in_database(vid, found)
-            return build_summary_response(SummaryState.DONE, found)
+            return build_summary_response(State.DONE, found)
 
     if rds.exists(no_transcript_rds_key) or no_transcript:
         logger.info(f'summarize, but no transcript for now, vid={vid}')
-        return build_summary_response(SummaryState.NOTHING)
+        return build_summary_response(State.NOTHING)
 
     if rds.exists(summarize_rds_key):
         logger.info(f'summarize, but repeated, vid={vid}')
@@ -199,12 +201,12 @@ async def summarize(vid: str):
             logger.warning(f'summarize, but no transcript found, vid={vid}')
             rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
             rds.delete(summarize_rds_key)
-            return build_summary_response(SummaryState.NOTHING)
+            return build_summary_response(State.NOTHING)
     except (NoTranscriptFound, TranscriptsDisabled):
         logger.warning(f'summarize, but no transcript found, vid={vid}')
         rds.set(no_transcript_rds_key, 1, ex=_NO_TRANSCRIPT_RDS_KEY_EX)
         rds.delete(summarize_rds_key)
-        return build_summary_response(SummaryState.NOTHING)
+        return build_summary_response(State.NOTHING)
     except Exception:
         logger.exception(f'summarize failed, vid={vid}')
         rds.delete(no_transcript_rds_key)
@@ -354,7 +356,7 @@ async def _build_sse_response(vid: str) -> Response:
 async def _do_if_found_chapters_in_database(vid: str, found: list[Chapter]):
     rds.delete(_build_no_transcript_rds_key(vid))
     rds.delete(_build_summarize_rds_key(vid))
-    data = build_summary_response(SummaryState.DONE, found)
+    data = build_summary_response(State.DONE, found)
     await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
     await sse_publish(channel=vid, event=SseEvent.CLOSE)
 

@@ -1,6 +1,7 @@
 import asyncio
 import json
 
+from dataclasses import asdict
 from sys import maxsize
 from uuid import uuid4
 
@@ -11,7 +12,7 @@ from database.data import \
     Chapter, \
     ChapterSlicer, \
     ChapterStyle, \
-    SummaryState, \
+    State, \
     TimedText, \
     build_summary_response
 from logger import logger
@@ -146,6 +147,14 @@ Do not output any redundant explanation or information.
 '''
 
 
+def build_summary_response(state: State, chapters: list[Chapter] = []) -> dict:
+    chapters = list(map(lambda c: asdict(c), chapters))
+    return {
+        'state': state.value,
+        'chapters': chapters,
+    }
+
+
 # NoTranscriptFound, TranscriptsDisabled...
 def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
     timed_texts: list[TimedText] = []
@@ -228,7 +237,7 @@ async def summarize(
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
-        data = build_summary_response(SummaryState.DOING, chapters)
+        data = build_summary_response(State.DOING, chapters)
         await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
 
     tasks = []
@@ -471,7 +480,7 @@ async def _generate_chapters_one_by_one(
             await sse_publish(
                 channel=vid,
                 event=SseEvent.SUMMARY,
-                data=build_summary_response(SummaryState.DOING, chapters),
+                data=build_summary_response(State.DOING, chapters),
             )
 
         # Looks like it's the end and meanless, so ignore the chapter.
@@ -585,11 +594,11 @@ async def _summarize_chapter(
     await sse_publish(
         channel=chapter.vid,
         event=SseEvent.SUMMARY,
-        data=build_summary_response(SummaryState.DOING, [chapter]),
+        data=build_summary_response(State.DOING, [chapter]),
     )
 
 
 async def _do_before_return(vid: str, chapters: list[Chapter]):
-    data = build_summary_response(SummaryState.DONE, chapters)
+    data = build_summary_response(State.DONE, chapters)
     await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
     await sse_publish(channel=vid, event=SseEvent.CLOSE)
