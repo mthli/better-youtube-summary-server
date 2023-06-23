@@ -44,6 +44,7 @@ from summary import \
     parse_timed_texts_and_lang, \
     summarize as summarizing
 from translation import \
+    TRANSLATING_RDS_KEY_EX, \
     build_translation_channel, \
     build_translating_rds_key, \
     translate as translating
@@ -168,7 +169,6 @@ async def summarize(vid: str):
 
     if rds.exists(summarizing_rds_key):
         logger.info(f'summarize, but repeated, vid={vid}')
-        # rds.set(summarizing_rds_key, 1, ex=SUMMARIZING_RDS_KEY_EX)
         return await _build_sse_response(channel)
 
     # Set the summary proccess beginning flag here,
@@ -215,6 +215,7 @@ async def summarize(vid: str):
 async def translate(vid: str):
     _ = _parse_uid_from_headers(request.headers)
     openai_api_key = _parse_openai_api_key_from_headers(request.headers)
+    channel = build_translation_channel(vid)
 
     try:
         body: dict = await request.get_json() or {}
@@ -235,6 +236,12 @@ async def translate(vid: str):
     if not found:
         abort(404, f'chapters not exists, vid={vid}')
 
+    translating_rds_key = build_translating_rds_key(vid)
+    if rds.exists(translating_rds_key):
+        logger.info(f'translate, but repeated, vid={vid}')
+        return await _build_sse_response(channel)
+
+    rds.set(translating_rds_key, 1, ex=TRANSLATING_RDS_KEY_EX)
     await app.arq.enqueue_job(
         do_translate_job.__name__,
         vid,
@@ -243,7 +250,6 @@ async def translate(vid: str):
         openai_api_key,
     )
 
-    channel = build_translation_channel(vid)
     return await _build_sse_response(channel)
 
 
@@ -310,7 +316,7 @@ async def do_summarize_job(
     summarizing_rds_key = build_summarizing_rds_key(vid)
     rds.set(summarizing_rds_key, 1, ex=SUMMARIZING_RDS_KEY_EX)
 
-    chapters, has_exception = await summarizing(
+    chapters, _ = await summarizing(
         vid=vid,
         trigger=trigger,
         chapters=chapters,
@@ -319,7 +325,7 @@ async def do_summarize_job(
         openai_api_key=openai_api_key,
     )
 
-    if chapters:  # and (not has_exception):
+    if chapters:
         logger.info(f'summarize, save chapters to database, vid={vid}')
         delete_chapters_by_vid(vid)
         delete_feedback(vid)
@@ -339,7 +345,19 @@ async def do_translate_job(
     openai_api_key: str = '',
 ):
     logger.info(f'do translate job, vid={vid}')
-    # TODO
+
+    # Set flag again, although we have done this before.
+    translating_rds_key = build_translating_rds_key(vid)
+    rds.set(translating_rds_key, 1, ex=TRANSLATING_RDS_KEY_EX)
+
+    await translating(
+        vid=vid,
+        chapters=chapters,
+        language=language,
+        openai_api_key=openai_api_key,
+    )
+
+    rds.delete(translating_rds_key)
 
 
 # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html

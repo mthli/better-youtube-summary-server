@@ -33,6 +33,8 @@ the translation should keep the same format as the original field.
 Do not output any redundant explanation other than JSON.
 '''
 
+TRANSLATING_RDS_KEY_EX = 300  # 5 mins.
+
 
 def build_translation_channel(vid: str) -> str:
     return f'translation_channel_{vid}'
@@ -55,18 +57,15 @@ async def translate(
     chapters: list[Chapter],
     language: Language,
     openai_api_key: str = '',
-) -> tuple[list[Translation], bool]:
-    trans: list[Translation] = []
-    has_exception = False
-
+):
     if not chapters:
         logger.warning(f'translate, but chapters are empty, vid={vid}')
-        return trans, has_exception
+        return
 
     lang = language.language
     if not lang:
         logger.warning(f'translate, but lang not exists, vid={vid}')
-        return trans, has_exception
+        return
 
     tasks = []
     for c in chapters:
@@ -77,20 +76,19 @@ async def translate(
         ))
 
     res = await asyncio.gather(*tasks, return_exceptions=True)
+    trans: list[Translation] = []
+
     for r in res:
         if isinstance(r, Translation):
             trans.append(r)
         elif isinstance(r, Exception):
             logger.error(f'translate, but has exception, vid={vid}, e={r}')
-            has_exception = True
 
     await _do_sse_publish(State.DONE, trans)
     await sse_publish(
         channel=build_translation_channel(vid),
         event=SseEvent.CLOSE,
     )
-
-    return trans, has_exception
 
 
 async def _translate_chapter(
