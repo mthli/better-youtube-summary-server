@@ -149,6 +149,10 @@ Do not output any redundant explanation or information.
 '''
 
 
+def build_summary_channel(vid: str) -> str:
+    return f'summary_channel_{vid}'
+
+
 def build_summary_response(state: State, chapters: list[Chapter] = []) -> dict:
     chapters = list(map(lambda c: asdict(c), chapters))
     return {
@@ -239,8 +243,11 @@ async def summarize(
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
-        data = build_summary_response(State.DOING, chapters)
-        await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
+        await sse_publish(
+            channel=build_summary_channel(vid),
+            event=SseEvent.SUMMARY,
+            data=build_summary_response(State.DOING, chapters),
+        )
 
     tasks = []
     for i, c in enumerate(chapters):
@@ -480,7 +487,7 @@ async def _generate_chapters_one_by_one(
 
             chapters.append(data)
             await sse_publish(
-                channel=vid,
+                channel=build_summary_channel(vid),
                 event=SseEvent.SUMMARY,
                 data=build_summary_response(State.DOING, chapters),
             )
@@ -521,6 +528,7 @@ async def _summarize_chapter(
     lang: str,
     openai_api_key: str = '',
 ):
+    vid = chapter.vid
     summary = ''
     summary_start = 0
     refined_count = 0
@@ -561,7 +569,7 @@ async def _summarize_chapter(
 
         # FIXME (Matthew Lee) it is possible that content not changed, simply avoid redundant requests.
         if not content_has_changed:
-            logger.warning(f'summarize chapter, but content not changed, vid={chapter.vid}')  # nopep8.
+            logger.warning(f'summarize chapter, but content not changed, vid={vid}')  # nopep8.
             break
 
         if refined_count <= 0:
@@ -594,13 +602,14 @@ async def _summarize_chapter(
     chapter.refined = refined_count - 1 if refined_count > 0 else 0
 
     await sse_publish(
-        channel=chapter.vid,
+        channel=build_summary_channel(vid),
         event=SseEvent.SUMMARY,
         data=build_summary_response(State.DOING, [chapter]),
     )
 
 
 async def _do_before_return(vid: str, chapters: list[Chapter]):
+    channel = build_summary_channel(vid)
     data = build_summary_response(State.DONE, chapters)
-    await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
-    await sse_publish(channel=vid, event=SseEvent.CLOSE)
+    await sse_publish(channel=channel, event=SseEvent.SUMMARY, data=data)
+    await sse_publish(channel=channel, event=SseEvent.CLOSE)

@@ -33,9 +33,13 @@ from logger import logger
 from rds import rds
 from sse import SseEvent, sse_publish, sse_subscribe
 from summary import \
+    build_summary_channel, \
     build_summary_response, \
     parse_timed_texts_and_lang, \
     summarize as summarizing
+from translation import \
+    build_translation_channel, \
+    translate as translating
 
 _SUMMARIZE_RDS_KEY_EX = 300  # 5 mins.
 _NO_TRANSCRIPT_RDS_KEY_EX = 86400  # 24 hours.
@@ -124,6 +128,9 @@ async def feedback(vid: str):
 # }
 @app.post('/api/translate/<string:vid>')
 async def translate(vid: str):
+    _ = _parse_uid_from_headers(request.headers)
+    openai_api_key = _parse_openai_api_key_from_headers(request.headers)
+
     try:
         body: dict = await request.get_json() or {}
     except Exception as e:
@@ -141,9 +148,18 @@ async def translate(vid: str):
 
     found = find_chapters_by_vid(vid)
     if not found:
-        return {}
+        abort(404, f'chapters not exists, vid={vid}')
 
-    # TODO
+    await app.arq.enqueue_job(
+        do_translate_job.__name__,
+        vid,
+        found,
+        lang,
+        openai_api_key,
+    )
+
+    channel = build_translation_channel(vid)
+    return await _build_sse_response(channel)
 
 
 # {
@@ -164,6 +180,7 @@ async def summarize(vid: str):
 
     no_transcript_rds_key = _build_no_transcript_rds_key(vid)
     summarize_rds_key = _build_summarize_rds_key(vid)
+    channel = build_summary_channel(vid)
 
     found = find_chapters_by_vid(vid)
     if found:
@@ -187,7 +204,7 @@ async def summarize(vid: str):
     if rds.exists(summarize_rds_key):
         logger.info(f'summarize, but repeated, vid={vid}')
         rds.set(summarize_rds_key, 1, ex=_SUMMARIZE_RDS_KEY_EX)
-        return await _build_sse_response(vid)
+        return await _build_sse_response(channel)
 
     # Set the summary proccess beginning flag here,
     # because of we need to get the transcript first,
@@ -223,7 +240,7 @@ async def summarize(vid: str):
         openai_api_key,
     )
 
-    return await _build_sse_response(vid)
+    return await _build_sse_response(channel)
 
 
 def _parse_uid_from_headers(headers: Headers, check: bool = True) -> str:
@@ -294,6 +311,18 @@ async def do_on_arq_worker_shutdown(ctx: dict):
 
 
 # ctx is arq first param, keep it.
+async def do_translate_job(
+    ctx: dict,
+    vid: str,
+    chapters: list[Chapter],
+    language: Language,
+    openai_api_key: str = '',
+):
+    logger.info(f'do translate job, vid={vid}')
+    # TODO
+
+
+# ctx is arq first param, keep it.
 async def do_summarize_job(
     ctx: dict,
     vid: str,
@@ -338,9 +367,9 @@ def _build_no_transcript_rds_key(vid: str) -> str:
 
 
 # https://quart.palletsprojects.com/en/latest/how_to_guides/server_sent_events.html
-async def _build_sse_response(vid: str) -> Response:
+async def _build_sse_response(channel: str) -> Response:
     res = await make_response(
-        sse_subscribe(vid),
+        sse_subscribe(channel),
         {
             'Content-Type': 'text/event-stream',
             'Transfer-Encoding': 'chunked',
@@ -356,9 +385,10 @@ async def _build_sse_response(vid: str) -> Response:
 async def _do_if_found_chapters_in_database(vid: str, found: list[Chapter]):
     rds.delete(_build_no_transcript_rds_key(vid))
     rds.delete(_build_summarize_rds_key(vid))
+    channel = build_summary_channel(vid)
     data = build_summary_response(State.DONE, found)
-    await sse_publish(channel=vid, event=SseEvent.SUMMARY, data=data)
-    await sse_publish(channel=vid, event=SseEvent.CLOSE)
+    await sse_publish(channel=channel, event=SseEvent.SUMMARY, data=data)
+    await sse_publish(channel=channel, event=SseEvent.CLOSE)
 
 
 # https://arq-docs.helpmanual.io/#simple-usage
