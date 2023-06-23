@@ -136,7 +136,7 @@ Your job is trying to refine the existing bullet list summary (only if needed) w
 If the the given content isn't useful or doesn't make sense, don't refine the the existing summary.
 
 The output format should be a markdown bullet list, and each bullet point should end with a period.
-The output language should be "{lang}" in ISO 639-1.
+The output language should be "{lang}" in BCP 47.
 
 Please exclude line like "[Music]", "[Applause]", "[Laughter]" and so on.
 Please merge similar viewpoints before the final output.

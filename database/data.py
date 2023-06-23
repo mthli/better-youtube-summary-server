@@ -52,6 +52,7 @@ class TimedText:
     text: str = ''       # required.
 
 
+@dataclass
 class Translation:
     vid: str = ''      # required.
     cid: str = ''      # required.
