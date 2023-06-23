@@ -88,7 +88,9 @@ def insert_or_update_translation(translation: Translation):
                 {_COLUMN_CID},
                 {_COLUMN_LANG},
                 {_COLUMN_CHAPTER},
-                {_COLUMN_SUMMARY}
+                {_COLUMN_SUMMARY},
+                {_COLUMN_CREATE_TIMESTAMP},
+                {_COLUMN_UPDATE_TIMESTAMP}
             ) VALUES (
                 '{sqlescape(translation.vid)}',
                 '{sqlescape(translation.cid)}',
