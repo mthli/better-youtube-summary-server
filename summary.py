@@ -155,7 +155,7 @@ NO_TRANSCRIPT_RDS_KEY_EX = 8 * 60 * 60  # 8 hours.
 
 
 def build_summary_channel(vid: str) -> str:
-    return f'summary_channel_{vid}'
+    return f'summary_{vid}'
 
 
 def build_summary_response(state: State, chapters: list[Chapter] = []) -> dict:

@@ -13,7 +13,6 @@ from rds import ards
 @unique
 class SseEvent(StrEnum):
     SUMMARY = 'summary'
-    TRANSLATION = 'translation'
     CLOSE = 'close'
 
 

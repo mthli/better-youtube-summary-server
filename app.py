@@ -17,7 +17,6 @@ from database.chapter import \
     insert_chapters, \
     delete_chapters_by_vid
 from database.data import \
-    Chapter, \
     ChapterSlicer, \
     Feedback, \
     State, \
