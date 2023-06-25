@@ -6,8 +6,16 @@ from dataclasses import dataclass, asdict
 from enum import IntEnum, unique
 from quart import abort
 from strenum import StrEnum
-from tenacity import after_log, retry, retry_if_exception_type, stop_after_attempt, wait_fixed
-from werkzeug.exceptions import BadGateway, TooManyRequests
+from tenacity import \
+    after_log, \
+    retry, \
+    retry_if_exception_type, \
+    stop_after_attempt, \
+    wait_fixed
+from werkzeug.exceptions import \
+    BadGateway, \
+    ServiceUnavailable, \
+    TooManyRequests
 
 from constants import APPLICATION_JSON, USER_AGENT
 from logger import logger
@@ -80,6 +88,7 @@ def count_tokens(messages: list[Message]) -> int:
     retry=retry_if_exception_type((
         httpx.ConnectError,
         BadGateway,
+        ServiceUnavailable,
         TooManyRequests,
     )),
     wait=wait_fixed(1),  # wait 1 second between retries.
