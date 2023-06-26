@@ -3,7 +3,7 @@ from openai import Message, Role, TokenLimit, build_message
 # For 5 mins video such as https://www.youtube.com/watch?v=tCBknJLD4qY,
 # or 10 mins video such as https://www.youtube.com/watch?v=QKOd8TDptt0.
 GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
-# TODO (Matthew Lee) testing...
+# For more than 15 mins video such as https://www.youtube.com/watch?v=PhFwDJCEhBg.
 GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K = TokenLimit.GPT_3_5_TURBO_16K - 2048  # nopep8, 14336.
 
 # Looks like use the word "outline" is better than the work "chapter".
@@ -120,8 +120,7 @@ _GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K = '''
 ]
 '''
 
-# For more than 10 mins video such as https://www.youtube.com/watch?v=aTf7AMVOoDY,
-# or more than 30 mins video such as https://www.youtube.com/watch?v=WRLVrfIBS1k.
+# For more than 30 mins video such as https://www.youtube.com/watch?v=WRLVrfIBS1k.
 GENERATE_ONE_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
 # Looks like use the word "outline" is better than the work "chapter".
 GENERATE_ONE_CHAPTER_SYSTEM_PROMPT = '''
