@@ -22,14 +22,16 @@ from openai import Model, Role, \
     count_tokens, \
     get_content
 from prompt import \
-    GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT, \
-    GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT, \
+    GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K, \
+    GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K, \
     GENERATE_ONE_CHAPTER_SYSTEM_PROMPT, \
     GENERATE_ONE_CHAPTER_TOKEN_LIMIT, \
     SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT, \
     SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT, \
     SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT, \
-    SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT
+    SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT, \
+    generate_multi_chapters_example_messages_for_4k, \
+    generate_multi_chapters_example_messages_for_16k
 from rds import rds
 from sse import SseEvent, sse_publish
 
@@ -150,24 +152,38 @@ async def summarize(
     )
 
     if not chapters:
+        # Use the "outline" and "information" fields if they can be generated in 4k.
         chapters = await _generate_multi_chapters(
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
             lang=lang,
+            model=Model.GPT_3_5_TURBO,
             openai_api_key=openai_api_key,
         )
         if chapters:
             await _do_before_return(vid, chapters)
             return chapters, has_exception
 
-        chapters = await _generate_chapters_one_by_one(
+        # Just use the "outline" field if it can be generated in 16k.
+        chapters = await _generate_multi_chapters(
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
             lang=lang,
+            model=Model.GPT_3_5_TURBO_16K,
             openai_api_key=openai_api_key,
         )
+
+        if not chapters:
+            chapters = await _generate_chapters_one_by_one(
+                vid=vid,
+                trigger=trigger,
+                timed_texts=timed_texts,
+                lang=lang,
+                openai_api_key=openai_api_key,
+            )
+
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
@@ -249,10 +265,9 @@ async def _generate_multi_chapters(
     trigger: str,
     timed_texts: list[TimedText],
     lang: str,
+    model: Model = Model.GPT_3_5_TURBO,
     openai_api_key: str = '',
 ) -> list[Chapter]:
-    system_prompt = GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
-    system_message = build_message(Role.SYSTEM, system_prompt)
     chapters: list[Chapter] = []
     content: list[dict] = []
 
@@ -270,16 +285,27 @@ async def _generate_multi_chapters(
         content=json.dumps(content, ensure_ascii=False),
     )
 
-    messages = [system_message, user_message]
-    tokens = count_tokens(messages)
-    if tokens >= GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT:
-        logger.info(f'generate multi chapters, reach token limit, vid={vid}, tokens={tokens}')  # nopep8.
-        return chapters
+    if model == Model.GPT_3_5_TURBO:
+        messages = generate_multi_chapters_example_messages_for_4k(lang=lang)
+        messages.append(user_message)
+        count = count_tokens(messages)
+        if count >= GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K:
+            logger.info(f'generate multi chapters with 4k, reach token limit, vid={vid}, count={count}')  # nopep8.
+            return chapters
+    elif model == Model.GPT_3_5_TURBO_16K:
+        messages = generate_multi_chapters_example_messages_for_16k(lang=lang)
+        messages.append(user_message)
+        count = count_tokens(messages)
+        if count >= GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K:
+            logger.info(f'generate multi chapters with 16k, reach token limit, vid={vid}, count={count}')  # nopep8.
+            return chapters
+    else:
+        abort(500, f'generate multi chapters with wrong model, model={model}')
 
     try:
         body = await chat(
             messages=messages,
-            model=Model.GPT_3_5_TURBO,
+            model=model,
             top_p=0.1,
             timeout=90,
             api_key=openai_api_key,
