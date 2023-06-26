@@ -16,139 +16,24 @@ from database.data import \
     TimedText
 from database.feedback import find_feedback
 from logger import logger
-from openai import Model, Role, TokenLimit, \
+from openai import Model, Role, \
     build_message, \
     chat, \
     count_tokens, \
     get_content
+from prompt import \
+    GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K, \
+    GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K, \
+    GENERATE_ONE_CHAPTER_SYSTEM_PROMPT, \
+    GENERATE_ONE_CHAPTER_TOKEN_LIMIT, \
+    SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT, \
+    SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT, \
+    SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT, \
+    SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT, \
+    generate_multi_chapters_example_messages_for_4k, \
+    generate_multi_chapters_example_messages_for_16k
 from rds import rds
 from sse import SseEvent, sse_publish
-
-# For more than 10 mins video such as https://www.youtube.com/watch?v=aTf7AMVOoDY,
-# or more than 30 mins video such as https://www.youtube.com/watch?v=WRLVrfIBS1k.
-_GENERATE_ONE_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
-# Looks like use the word "outline" is better than the work "chapter".
-_GENERATE_ONE_CHAPTER_SYSTEM_PROMPT = '''
-Given a part of video subtitles JSON array as shown below:
-
-```json
-[
-  {{
-    "index": int field, the subtitle line index.
-    "start": int field, the subtitle start time in seconds.
-    "text": string field, the subtitle text itself.
-  }}
-]
-```
-
-Your job is trying to generate the subtitles' outline with follow steps:
-
-1. Extract an useful information as the outline context,
-2. exclude out-of-context parts and irrelevant parts,
-3. exclude text like "[Music]", "[Applause]", "[Laughter]" and so on,
-4. summarize the useful information to one-word as the outline title.
-
-Please return a JSON object as shown below:
-
-```json
-{{
-  "end_at": int field, the outline context end at which subtitle index.
-  "start": int field, the start time of the outline context in seconds, must >= {start_time}.
-  "timestamp": string field, the start time of the outline context in "HH:mm:ss" format.
-  "outline": string field, the outline title in language "{lang}".
-}}
-```
-
-Please output JSON only.
-Do not output any redundant explanation.
-'''
-
-# For 5 mins video such as https://www.youtube.com/watch?v=tCBknJLD4qY,
-# or 10 mins video such as https://www.youtube.com/watch?v=QKOd8TDptt0.
-_GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
-# Looks like use the word "outline" is better than the work "chapter".
-_GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT = '''
-Given the following video subtitles represented as a JSON array as shown below:
-
-```json
-[
-  {{
-    "start": int field, the subtitle start time in seconds.
-    "text": string field, the subtitle text itself.
-  }}
-]
-```
-
-Please generate the subtitles' outlines from top to bottom,
-and extract an useful information from each outline context;
-each useful information should end with a period;
-exclude the introduction at the beginning and the conclusion at the end;
-exclude text like "[Music]", "[Applause]", "[Laughter]" and so on.
-
-Return a JSON array as shown below:
-
-```json
-[
-  {{
-    "outline": string field, a brief outline title in language "{lang}".
-    "information": string field, an useful information in the outline context in language "{lang}".
-    "start": int field, the start time of the outline in seconds.
-    "timestamp": string field, the start time of the outline in "HH:mm:ss" format.
-  }}
-]
-```
-
-Please output JSON only.
-Do not output any redundant explanation.
-'''
-
-# https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
-_SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
-_SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT = '''
-Given a part of video subtitles about "{chapter}".
-Please summarize and list the most important points of the subtitles.
-
-The subtitles consists of many lines.
-The format of each line is like `[text...]`, for example `[hello, world]`.
-
-The output format should be a markdown bullet list, and each bullet point should end with a period.
-The output language should be "{lang}" in ISO 639-1.
-
-Please exclude line like "[Music]", "[Applause]", "[Laughter]" and so on.
-Please merge similar viewpoints before the final output.
-Please keep the output clear and accurate.
-
-Do not output any redundant or irrelevant points.
-Do not output any redundant explanation or information.
-'''
-
-# https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L4
-_SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO * 5 / 8  # nopep8, 2560.
-_SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT = '''
-We have provided an existing bullet list summary up to a certain point:
-
-```
-{summary}
-```
-
-We have the opportunity to refine the existing summary (only if needed) with some more content.
-
-The content is a part of video subtitles about "{chapter}", consists of many lines.
-The format of each line is like `[text...]`, for example `[hello, world]`.
-
-Please refine the existing bullet list summary (only if needed) with the given content.
-If the the given content isn't useful or doesn't make sense, don't refine the the existing summary.
-
-The output format should be a markdown bullet list, and each bullet point should end with a period.
-The output language should be "{lang}" in BCP 47.
-
-Please exclude line like "[Music]", "[Applause]", "[Laughter]" and so on.
-Please merge similar viewpoints before the final output.
-Please keep the output clear and accurate.
-
-Do not output any redundant or irrelevant points.
-Do not output any redundant explanation or information.
-'''
 
 SUMMARIZING_RDS_KEY_EX = 300  # 5 mins.
 NO_TRANSCRIPT_RDS_KEY_EX = 8 * 60 * 60  # 8 hours.
@@ -267,24 +152,38 @@ async def summarize(
     )
 
     if not chapters:
+        # Use the "outline" and "information" fields if they can be generated in 4k.
         chapters = await _generate_multi_chapters(
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
             lang=lang,
+            model=Model.GPT_3_5_TURBO,
             openai_api_key=openai_api_key,
         )
         if chapters:
             await _do_before_return(vid, chapters)
             return chapters, has_exception
 
-        chapters = await _generate_chapters_one_by_one(
+        # Just use the "outline" field if it can be generated in 16k.
+        chapters = await _generate_multi_chapters(
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
             lang=lang,
+            model=Model.GPT_3_5_TURBO_16K,
             openai_api_key=openai_api_key,
         )
+
+        if not chapters:
+            chapters = await _generate_chapters_one_by_one(
+                vid=vid,
+                trigger=trigger,
+                timed_texts=timed_texts,
+                lang=lang,
+                openai_api_key=openai_api_key,
+            )
+
         if not chapters:
             abort(500, f'summarize failed, no chapters, vid={vid}')
     else:
@@ -366,10 +265,9 @@ async def _generate_multi_chapters(
     trigger: str,
     timed_texts: list[TimedText],
     lang: str,
+    model: Model = Model.GPT_3_5_TURBO,
     openai_api_key: str = '',
 ) -> list[Chapter]:
-    system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
-    system_message = build_message(Role.SYSTEM, system_prompt)
     chapters: list[Chapter] = []
     content: list[dict] = []
 
@@ -387,16 +285,27 @@ async def _generate_multi_chapters(
         content=json.dumps(content, ensure_ascii=False),
     )
 
-    messages = [system_message, user_message]
-    tokens = count_tokens(messages)
-    if tokens >= _GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT:
-        logger.info(f'generate multi chapters, reach token limit, vid={vid}, tokens={tokens}')  # nopep8.
-        return chapters
+    if model == Model.GPT_3_5_TURBO:
+        messages = generate_multi_chapters_example_messages_for_4k(lang=lang)
+        messages.append(user_message)
+        count = count_tokens(messages)
+        if count >= GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K:
+            logger.info(f'generate multi chapters with 4k, reach token limit, vid={vid}, count={count}')  # nopep8.
+            return chapters
+    elif model == Model.GPT_3_5_TURBO_16K:
+        messages = generate_multi_chapters_example_messages_for_16k(lang=lang)
+        messages.append(user_message)
+        count = count_tokens(messages)
+        if count >= GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K:
+            logger.info(f'generate multi chapters with 16k, reach token limit, vid={vid}, count={count}')  # nopep8.
+            return chapters
+    else:
+        abort(500, f'generate multi chapters with wrong model, model={model}')
 
     try:
         body = await chat(
             messages=messages,
-            model=Model.GPT_3_5_TURBO,
+            model=model,
             top_p=0.1,
             timeout=90,
             api_key=openai_api_key,
@@ -453,7 +362,7 @@ async def _generate_chapters_one_by_one(
                         f'timed_texts_start={timed_texts_start}')
             break  # drained.
 
-        system_prompt = _GENERATE_ONE_CHAPTER_SYSTEM_PROMPT.format(
+        system_prompt = GENERATE_ONE_CHAPTER_SYSTEM_PROMPT.format(
             start_time=int(texts[0].start),
             lang=lang,
         )
@@ -477,7 +386,7 @@ async def _generate_chapters_one_by_one(
                 content=json.dumps(temp, ensure_ascii=False),
             )
 
-            if count_tokens([system_message, user_message]) < _GENERATE_ONE_CHAPTER_TOKEN_LIMIT:
+            if count_tokens([system_message, user_message]) < GENERATE_ONE_CHAPTER_TOKEN_LIMIT:
                 content = temp
                 timed_texts_start += 1
             else:
@@ -591,12 +500,12 @@ async def _summarize_chapter(
         for t in texts:
             lines = content + '\n' + f'[{t.text}]' if content else f'[{t.text}]'  # nopep8.
             if refined_count <= 0:
-                system_prompt = _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
+                system_prompt = SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
                     chapter=chapter.chapter,
                     lang=lang,
                 )
             else:
-                system_prompt = _SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT.format(
+                system_prompt = SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT.format(
                     chapter=chapter.chapter,
                     summary=summary,
                     lang=lang,
@@ -604,8 +513,8 @@ async def _summarize_chapter(
 
             system_message = build_message(Role.SYSTEM, system_prompt)
             user_message = build_message(Role.USER, lines)
-            token_limit = _SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT \
-                if refined_count <= 0 else _SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT
+            token_limit = SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT \
+                if refined_count <= 0 else SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT
 
             if count_tokens([system_message, user_message]) < token_limit:
                 content_has_changed = True
@@ -620,12 +529,12 @@ async def _summarize_chapter(
             break
 
         if refined_count <= 0:
-            system_prompt = _SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
+            system_prompt = SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT.format(
                 chapter=chapter.chapter,
                 lang=lang,
             )
         else:
-            system_prompt = _SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT.format(
+            system_prompt = SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT.format(
                 chapter=chapter.chapter,
                 summary=summary,
                 lang=lang,
