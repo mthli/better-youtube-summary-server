@@ -24,8 +24,6 @@ from openai import Model, Role, \
 from prompt import \
     GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K, \
     GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K, \
-    GENERATE_ONE_CHAPTER_SYSTEM_PROMPT, \
-    GENERATE_ONE_CHAPTER_TOKEN_LIMIT, \
     SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT, \
     SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT, \
     SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT, \
@@ -176,7 +174,7 @@ async def summarize(
         )
 
         if not chapters:
-            chapters = await _generate_chapters_one_by_one(
+            chapters, has_exception = await _generate_chapters_chunk(
                 vid=vid,
                 trigger=trigger,
                 timed_texts=timed_texts,
@@ -321,11 +319,11 @@ async def _generate_multi_chapters(
         return chapters
 
     for r in res:
-        chapter = r.get('outline', '').strip()
+        outline = r.get('outline', '').strip()
         information = r.get('information', '').strip()
         seconds = r.get('start', -1)
 
-        if chapter and information and seconds >= 0:
+        if outline and information and seconds >= 0:
             chapters.append(Chapter(
                 cid=str(uuid4()),
                 vid=vid,
@@ -334,7 +332,7 @@ async def _generate_multi_chapters(
                 style=ChapterStyle.TEXT.value,
                 start=seconds,
                 lang=lang,
-                chapter=chapter,
+                chapter=outline,
                 summary=information,
             ))
 
@@ -342,140 +340,129 @@ async def _generate_multi_chapters(
     return sorted(chapters, key=lambda c: c.start)
 
 
-async def _generate_chapters_one_by_one(
+async def _generate_chapters_chunk(
     vid: str,
     trigger: str,
     timed_texts: list[TimedText],
     lang: str,
     openai_api_key: str = '',
-) -> list[Chapter]:
+) -> tuple[list[Chapter], bool]:
     chapters: list[Chapter] = []
-    timed_texts_start = 0
-    latest_end_at = -1
+    has_exception = False
+    timed_texts_index = 0
 
     while True:
-        texts = timed_texts[timed_texts_start:]
+        texts = timed_texts[timed_texts_index:]
         if not texts:
-            logger.info(f'generate one chapter, drained, '
-                        f'vid={vid}, '
-                        f'len={len(timed_texts)}, '
-                        f'timed_texts_start={timed_texts_start}')
+            logger.info(f'generate chapters chunk, drained, vid={vid}, len={len(timed_texts)}')  # nopep8.
+            has_exception = False
             break  # drained.
 
-        system_prompt = GENERATE_ONE_CHAPTER_SYSTEM_PROMPT.format(
-            start_time=int(texts[0].start),
-            lang=lang,
-        )
-        system_message = build_message(Role.SYSTEM, system_prompt)
+        # Remove latest chapter for continious context.
+        latest = chapters.pop() if chapters else None
+        if latest:
+            timed_texts_index = _get_timed_texts_start_index(timed_texts, latest.start)  # nopep8.
+            logger.info(f'generate chapters chunk, pop, vid={vid}, index={timed_texts_index}')  # nopep8.
+
+            texts = timed_texts[timed_texts_index:]
+            if not texts:
+                logger.warning(f'generate chapters chunk, pop, vid={vid}, len={len(timed_texts)}')  # nopep8.
+                has_exception = True
+                break  # drained.
 
         content: list[dict] = []
         for t in texts:
             text = t.text.strip()
             if not text:
+                timed_texts_index += 1
                 continue
 
             temp = content.copy()
             temp.append({
-                'index': timed_texts_start,
                 'start': int(t.start),
                 'text': text,
             })
 
-            user_message = build_message(
+            messages = generate_multi_chapters_example_messages_for_16k(lang)
+            messages.append(build_message(
                 role=Role.USER,
                 content=json.dumps(temp, ensure_ascii=False),
-            )
+            ))
 
-            if count_tokens([system_message, user_message]) < GENERATE_ONE_CHAPTER_TOKEN_LIMIT:
+            if count_tokens(messages) < GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K:
                 content = temp
-                timed_texts_start += 1
+                timed_texts_index += 1
             else:
                 break  # for.
 
-        user_message = build_message(
+        messages = generate_multi_chapters_example_messages_for_16k(lang)
+        messages.append(build_message(
             role=Role.USER,
             content=json.dumps(content, ensure_ascii=False),
-        )
-
-        logger.info(f'generate one chapter, '
-                    f'vid={vid}, '
-                    f'latest_end_at={latest_end_at}, '
-                    f'timed_texts_start={timed_texts_start}')
+        ))
 
         try:
             body = await chat(
-                messages=[system_message, user_message],
-                model=Model.GPT_3_5_TURBO,
+                messages=messages,
+                model=Model.GPT_3_5_TURBO_16K,
                 top_p=0.1,
                 timeout=90,
                 api_key=openai_api_key,
             )
 
             content = get_content(body)
-            logger.info(f'generate one chapter, vid={vid}, content=\n{content}')  # nopep8.
+            logger.info(f'generate chapters chunk, vid={vid}, content=\n{content}')  # nopep8.
 
             # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
-            res: dict = json.loads(content)
+            res: list[dict] = json.loads(content)
         except Exception:
-            logger.exception(f'generate one chapter failed, vid={vid}')
+            logger.exception(f'generate chapters chunk failed, vid={vid}')
+            has_exception = True
             break  # drained.
 
-        chapter = res.get('outline', '').strip()
-        seconds = res.get('start', -1)
-        end_at = res.get('end_at')
+        for r in res:
+            outline = r.get('outline', '').strip()
+            information = r.get('information', '').strip()
+            seconds = r.get('start', -1)
 
-        # Looks like it's the end and meanless, so ignore the chapter.
-        if type(end_at) is not int:  # NoneType.
-            logger.info(f'generate one chapter, end_at is not int, vid={vid}')
-            break  # drained.
+            if outline and information and seconds >= 0:
+                chapters.append(Chapter(
+                    cid=str(uuid4()),
+                    vid=vid,
+                    trigger=trigger,
+                    slicer=ChapterSlicer.OPENAI.value,
+                    style=ChapterStyle.TEXT.value,
+                    start=seconds,
+                    lang=lang,
+                    chapter=outline,
+                    summary=information,
+                ))
 
-        if chapter and seconds >= 0:
-            data = Chapter(
-                cid=str(uuid4()),
-                vid=vid,
-                trigger=trigger,
-                slicer=ChapterSlicer.OPENAI.value,
-                style=ChapterStyle.MARKDOWN.value,
-                start=seconds,
-                lang=lang,
-                chapter=chapter,
-            )
+        # FIXME (Matthew Lee) prompt output may not sortd by seconds asc.
+        chapters = sorted(chapters, key=lambda c: c.start)
+        await sse_publish(
+            channel=build_summary_channel(vid),
+            event=SseEvent.SUMMARY,
+            data=build_summary_response(State.DOING, chapters),
+        )
 
-            chapters.append(data)
-            await sse_publish(
-                channel=build_summary_channel(vid),
-                event=SseEvent.SUMMARY,
-                data=build_summary_response(State.DOING, chapters),
-            )
-
-        # Looks like it's the end and meanless, so ignore the chapter.
-        # if type(end_at) is not int:  # NoneType.
-        #     logger.info(f'generate chapters, end_at is not int, vid={vid}')
-        #     break  # drained.
-
-        if end_at <= latest_end_at:
-            logger.warning(f'generate one chapter, avoid infinite loop, vid={vid}')  # nopep8.
-            latest_end_at += 5  # force a different context.
-            timed_texts_start = latest_end_at
-        elif end_at > timed_texts_start:
-            logger.warning(f'generate one chapter, avoid drain early, vid={vid}')  # nopep8.
-            latest_end_at = timed_texts_start
-            timed_texts_start = latest_end_at + 1
-        else:
-            latest_end_at = end_at
-            timed_texts_start = end_at + 1
-
-    return chapters
+    # FIXME (Matthew Lee) prompt output may not sortd by seconds asc.
+    return sorted(chapters, key=lambda c: c.start), has_exception
 
 
 def _get_timed_texts_in_range(timed_texts: list[TimedText], start_time: int, end_time: int = maxsize) -> list[TimedText]:
     res: list[TimedText] = []
-
     for t in timed_texts:
         if start_time <= t.start and t.start < end_time:
             res.append(t)
-
     return res
+
+
+def _get_timed_texts_start_index(timed_texts: list[TimedText], start_time: int) -> int:
+    for i, t in enumerate(timed_texts):
+        if t.start >= start_time:
+            return i
+    return len(timed_texts)
 
 
 async def _summarize_chapter(
@@ -551,9 +538,11 @@ async def _summarize_chapter(
         )
 
         summary = get_content(body).strip()
+        chapter.style = ChapterStyle.MARKDOWN.value
         chapter.summary = summary  # cache even not finished.
         refined_count += 1
 
+    chapter.style = ChapterStyle.MARKDOWN.value
     chapter.summary = summary.strip()
     chapter.refined = refined_count - 1 if refined_count > 0 else 0
 
