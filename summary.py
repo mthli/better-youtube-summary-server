@@ -22,14 +22,14 @@ from openai import Model, Role, \
     count_tokens, \
     get_content
 from prompt import \
-    GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K, \
-    GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K, \
+    GENERATE_CHAPTERS_TOKEN_LIMIT_FOR_4K, \
+    GENERATE_CHAPTERS_TOKEN_LIMIT_FOR_16K, \
     SUMMARIZE_FIRST_CHAPTER_SYSTEM_PROMPT, \
     SUMMARIZE_FIRST_CHAPTER_TOKEN_LIMIT, \
     SUMMARIZE_NEXT_CHAPTER_SYSTEM_PROMPT, \
     SUMMARIZE_NEXT_CHAPTER_TOKEN_LIMIT, \
-    generate_multi_chapters_example_messages_for_4k, \
-    generate_multi_chapters_example_messages_for_16k
+    generate_chapters_example_messages_for_4k, \
+    generate_chapters_example_messages_for_16k
 from rds import rds
 from sse import SseEvent, sse_publish
 
@@ -151,7 +151,7 @@ async def summarize(
 
     if not chapters:
         # Use the "outline" and "information" fields if they can be generated in 4k.
-        chapters = await _generate_multi_chapters(
+        chapters = await _generate_chapters(
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
@@ -164,7 +164,7 @@ async def summarize(
             return chapters, has_exception
 
         # Just use the "outline" field if it can be generated in 16k.
-        chapters = await _generate_multi_chapters(
+        chapters = await _generate_chapters(
             vid=vid,
             trigger=trigger,
             timed_texts=timed_texts,
@@ -257,8 +257,7 @@ def _parse_chapters(
     return res
 
 
-# FIXME (Matthew Lee) suppurt stream.
-async def _generate_multi_chapters(
+async def _generate_chapters(
     vid: str,
     trigger: str,
     timed_texts: list[TimedText],
@@ -284,21 +283,21 @@ async def _generate_multi_chapters(
     )
 
     if model == Model.GPT_3_5_TURBO:
-        messages = generate_multi_chapters_example_messages_for_4k(lang=lang)
+        messages = generate_chapters_example_messages_for_4k(lang=lang)
         messages.append(user_message)
         count = count_tokens(messages)
-        if count >= GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K:
-            logger.info(f'generate multi chapters with 4k, reach token limit, vid={vid}, count={count}')  # nopep8.
+        if count >= GENERATE_CHAPTERS_TOKEN_LIMIT_FOR_4K:
+            logger.info(f'generate chapters with 4k, reach token limit, vid={vid}, count={count}')  # nopep8.
             return chapters
     elif model == Model.GPT_3_5_TURBO_16K:
-        messages = generate_multi_chapters_example_messages_for_16k(lang=lang)
+        messages = generate_chapters_example_messages_for_16k(lang=lang)
         messages.append(user_message)
         count = count_tokens(messages)
-        if count >= GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K:
-            logger.info(f'generate multi chapters with 16k, reach token limit, vid={vid}, count={count}')  # nopep8.
+        if count >= GENERATE_CHAPTERS_TOKEN_LIMIT_FOR_16K:
+            logger.info(f'generate chapters with 16k, reach token limit, vid={vid}, count={count}')  # nopep8.
             return chapters
     else:
-        abort(500, f'generate multi chapters with wrong model, model={model}')
+        abort(500, f'generate chapters with wrong model, model={model}')
 
     try:
         body = await chat(
@@ -310,12 +309,12 @@ async def _generate_multi_chapters(
         )
 
         content = get_content(body)
-        logger.info(f'generate multi chapters, vid={vid}, content=\n{content}')
+        logger.info(f'generate chapters, vid={vid}, content=\n{content}')
 
         # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
         res: list[dict] = json.loads(content)
     except Exception:
-        logger.exception(f'generate multi chapters failed, vid={vid}')
+        logger.exception(f'generate chapters failed, vid={vid}')
         return chapters
 
     for r in res:
@@ -362,11 +361,20 @@ async def _generate_chapters_chunk(
         latest = chapters.pop() if chapters else None
         if latest:
             timed_texts_index = _get_timed_texts_start_index(timed_texts, latest.start)  # nopep8.
-            logger.info(f'generate chapters chunk, pop, vid={vid}, index={timed_texts_index}')  # nopep8.
+            logger.info(
+                f'generate chapters chunk, pop, '
+                f'vid={vid}, '
+                f'start={latest.start}, '
+                f'index={timed_texts_index}')
 
             texts = timed_texts[timed_texts_index:]
             if not texts:
-                logger.warning(f'generate chapters chunk, pop, vid={vid}, len={len(timed_texts)}')  # nopep8.
+                logger.info(
+                    f'generate chapters chunk, pop, '
+                    f'vid={vid}, '
+                    f'start={latest.start}, ',
+                    f'index={timed_texts_index}, '
+                    f'len={len(timed_texts)}')
                 has_exception = True
                 break  # drained.
 
@@ -383,19 +391,27 @@ async def _generate_chapters_chunk(
                 'text': text,
             })
 
-            messages = generate_multi_chapters_example_messages_for_16k(lang)
+            messages = generate_chapters_example_messages_for_16k(lang=lang)
             messages.append(build_message(
                 role=Role.USER,
                 content=json.dumps(temp, ensure_ascii=False),
             ))
 
-            if count_tokens(messages) < GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K:
+            # FIXME (Matthew Lee) seems slowly.
+            count = count_tokens(messages)
+            if count < GENERATE_CHAPTERS_TOKEN_LIMIT_FOR_16K:
                 content = temp
                 timed_texts_index += 1
             else:
+                logger.info(
+                    f'generate chapters chunk, '
+                    f'reach token limit, '
+                    f'vid={vid}, '
+                    f'index={timed_texts_index}, '
+                    f'count={count}')
                 break  # for.
 
-        messages = generate_multi_chapters_example_messages_for_16k(lang)
+        messages = generate_chapters_example_messages_for_16k(lang=lang)
         messages.append(build_message(
             role=Role.USER,
             content=json.dumps(content, ensure_ascii=False),
@@ -411,7 +427,11 @@ async def _generate_chapters_chunk(
             )
 
             content = get_content(body)
-            logger.info(f'generate chapters chunk, vid={vid}, content=\n{content}')  # nopep8.
+            logger.info(
+                f'generate chapters chunk, '
+                f'vid={vid}, '
+                f'index={timed_texts_index}, '
+                f'content=\n{content}')
 
             # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
             res: list[dict] = json.loads(content)
@@ -440,11 +460,11 @@ async def _generate_chapters_chunk(
 
         # FIXME (Matthew Lee) prompt output may not sortd by seconds asc.
         chapters = sorted(chapters, key=lambda c: c.start)
-        await sse_publish(
-            channel=build_summary_channel(vid),
-            event=SseEvent.SUMMARY,
-            data=build_summary_response(State.DOING, chapters),
-        )
+        # await sse_publish(
+        #     channel=build_summary_channel(vid),
+        #     event=SseEvent.SUMMARY,
+        #     data=build_summary_response(State.DOING, chapters),
+        # )
 
     # FIXME (Matthew Lee) prompt output may not sortd by seconds asc.
     return sorted(chapters, key=lambda c: c.start), has_exception

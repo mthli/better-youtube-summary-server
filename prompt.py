@@ -2,12 +2,12 @@ from openai import Message, Role, TokenLimit, build_message
 
 # For 5 mins video such as https://www.youtube.com/watch?v=tCBknJLD4qY,
 # or 10 mins video such as https://www.youtube.com/watch?v=QKOd8TDptt0.
-GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_4K = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
+GENERATE_CHAPTERS_TOKEN_LIMIT_FOR_4K = TokenLimit.GPT_3_5_TURBO - 512  # nopep8, 3584.
 # For more than 15 mins video such as https://www.youtube.com/watch?v=PhFwDJCEhBg.
-GENERATE_MULTI_CHAPTERS_TOKEN_LIMIT_FOR_16K = TokenLimit.GPT_3_5_TURBO_16K - 2048  # nopep8, 14336.
+GENERATE_CHAPTERS_TOKEN_LIMIT_FOR_16K = TokenLimit.GPT_3_5_TURBO_16K - 2048  # nopep8, 14336.
 
 # Looks like use the word "outline" is better than the work "chapter".
-_GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT = '''
+_GENERATE_CHAPTERS_SYSTEM_PROMPT = '''
 Given the following video subtitles represented as a JSON array as shown below:
 
 ```json
@@ -42,7 +42,7 @@ Please output JSON only.
 Do not output any redundant explanation.
 '''
 
-_GENERATE_MULTI_CHAPTERS_USER_MESSAGE_FOR_16K = '''
+_GENERATE_CHAPTERS_USER_MESSAGE_FOR_16K = '''
 [
   {{"start": 0, "text": "Hi everyone, this is Chef Wang. Today, I will show everyone how to make"}},
   {{"start": 3, "text": "Egg Fried Rice."}},
@@ -91,7 +91,7 @@ _GENERATE_MULTI_CHAPTERS_USER_MESSAGE_FOR_16K = '''
 ]
 '''
 
-_GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K = '''
+_GENERATE_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K = '''
 [
   {{
     "outline": "Ingredients preparation",
@@ -118,44 +118,6 @@ _GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K = '''
     "timestamp": "00:02:35"
    }}
 ]
-'''
-
-# For more than 30 mins video such as https://www.youtube.com/watch?v=WRLVrfIBS1k.
-GENERATE_ONE_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
-# Looks like use the word "outline" is better than the work "chapter".
-GENERATE_ONE_CHAPTER_SYSTEM_PROMPT = '''
-Given a part of video subtitles JSON array as shown below:
-
-```json
-[
-  {{
-    "index": int field, the subtitle line index.
-    "start": int field, the subtitle start time in seconds.
-    "text": string field, the subtitle text itself.
-  }}
-]
-```
-
-Your job is trying to generate the subtitles' outline with follow steps:
-
-1. Extract an useful information as the outline context,
-2. exclude out-of-context parts and irrelevant parts,
-3. exclude text like "[Music]", "[Applause]", "[Laughter]" and so on,
-4. summarize the useful information to one-word as the outline title.
-
-Please return a JSON object as shown below:
-
-```json
-{{
-  "end_at": int field, the outline context end at which subtitle index.
-  "start": int field, the start time of the outline context in seconds, must >= {start_time}.
-  "timestamp": string field, the start time of the outline context in "HH:mm:ss" format.
-  "outline": string field, the outline title in language "{lang}".
-}}
-```
-
-Please output JSON only.
-Do not output any redundant explanation.
 '''
 
 # https://github.com/hwchase17/langchain/blob/master/langchain/chains/summarize/refine_prompts.py#L21
@@ -207,14 +169,14 @@ Do not output any redundant explanation or information.
 '''
 
 
-def generate_multi_chapters_example_messages_for_4k(lang: str) -> list[Message]:
-    system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
+def generate_chapters_example_messages_for_4k(lang: str) -> list[Message]:
+    system_prompt = _GENERATE_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
     return [build_message(Role.SYSTEM, system_prompt)]
 
 
-def generate_multi_chapters_example_messages_for_16k(lang: str) -> list[Message]:
-    system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
+def generate_chapters_example_messages_for_16k(lang: str) -> list[Message]:
+    system_prompt = _GENERATE_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
     system_message = build_message(Role.SYSTEM, system_prompt)
-    user_message = build_message(Role.USER, _GENERATE_MULTI_CHAPTERS_USER_MESSAGE_FOR_16K)  # nopep8.
-    assistant_message = build_message(Role.ASSISTANT, _GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K)  # nopep8.
+    user_message = build_message(Role.USER, _GENERATE_CHAPTERS_USER_MESSAGE_FOR_16K)  # nopep8.
+    assistant_message = build_message(Role.ASSISTANT, _GENERATE_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K)  # nopep8.
     return [system_message, user_message, assistant_message]
