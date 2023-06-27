@@ -93,8 +93,7 @@ def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
     timed_texts: list[TimedText] = []
 
     # https://en.wikipedia.org/wiki/Languages_used_on_the_Internet#Content_languages_on_YouTube
-    transcript_list = YouTubeTranscriptApi.list_transcripts(vid)
-    transcript = transcript_list.find_transcript([
+    codes = [
         'en',  # English.
         'es',  # Spanish.
         'pt',  # Portuguese.
@@ -112,7 +111,15 @@ def parse_timed_texts_and_lang(vid: str) -> tuple[list[TimedText], str]:
         'ja',  # Japanese.
         'ru',  # Russian.
         'de',  # German.
-    ])
+    ]
+
+    transcript_list = YouTubeTranscriptApi.list_transcripts(vid)
+
+    try:
+        transcript = transcript_list.find_manually_created_transcript(codes)
+    except Exception:  # NoTranscriptFound.
+        # logger.exception(f'find manually created transcript failed, vid={vid}')
+        transcript = transcript_list.find_generated_transcript(codes)
 
     lang = transcript.language_code
     array: list[dict] = transcript.fetch()
