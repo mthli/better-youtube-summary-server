@@ -6,6 +6,7 @@ from arq.connections import RedisSettings
 from arq.typing import WorkerSettingsBase
 from langcodes import Language
 from quart import Quart, Response, abort, json, request, make_response
+from quart_cors import cors
 from werkzeug.datastructures import Headers
 from werkzeug.exceptions import HTTPException
 from youtube_transcript_api import NoTranscriptFound, TranscriptsDisabled
@@ -46,6 +47,8 @@ from summary import \
 from translation import translate as translating
 
 app = Quart(__name__)
+app = cors(app, allow_origin='*')
+
 create_chapter_table()
 create_feedback_table()
 create_translation_table()
