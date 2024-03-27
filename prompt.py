@@ -215,6 +215,7 @@ def generate_multi_chapters_example_messages_for_4k(lang: str) -> list[Message]:
 def generate_multi_chapters_example_messages_for_16k(lang: str) -> list[Message]:
     system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
     system_message = build_message(Role.SYSTEM, system_prompt)
-    user_message = build_message(Role.USER, _GENERATE_MULTI_CHAPTERS_USER_MESSAGE_FOR_16K)  # nopep8.
-    assistant_message = build_message(Role.ASSISTANT, _GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K)  # nopep8.
+    # `format()` these too to turn "{{" into "{"
+    user_message = build_message(Role.USER, _GENERATE_MULTI_CHAPTERS_USER_MESSAGE_FOR_16K.format())  # nopep8.
+    assistant_message = build_message(Role.ASSISTANT, _GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K.format())  # nopep8.
     return [system_message, user_message, assistant_message]
