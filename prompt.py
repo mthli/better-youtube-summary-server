@@ -120,6 +120,10 @@ _GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K = '''
 ]
 '''
 
+_GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT_2_FOR_16K = '''
+For the next input, output the summary in language "{lang}" instead of "en".
+'''
+
 # For more than 30 mins video such as https://www.youtube.com/watch?v=WRLVrfIBS1k.
 GENERATE_ONE_CHAPTER_TOKEN_LIMIT = TokenLimit.GPT_3_5_TURBO - 160  # nopep8, 3936.
 # Looks like use the word "outline" is better than the work "chapter".
@@ -213,8 +217,10 @@ def generate_multi_chapters_example_messages_for_4k(lang: str) -> list[Message]:
 
 
 def generate_multi_chapters_example_messages_for_16k(lang: str) -> list[Message]:
-    system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang=lang)
+    system_prompt = _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT.format(lang="en")
     system_message = build_message(Role.SYSTEM, system_prompt)
-    user_message = build_message(Role.USER, _GENERATE_MULTI_CHAPTERS_USER_MESSAGE_FOR_16K)  # nopep8.
-    assistant_message = build_message(Role.ASSISTANT, _GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K)  # nopep8.
-    return [system_message, user_message, assistant_message]
+    # `format()` these too to turn "{{" into "{"
+    user_message = build_message(Role.USER, _GENERATE_MULTI_CHAPTERS_USER_MESSAGE_FOR_16K.format())  # nopep8.
+    assistant_message = build_message(Role.ASSISTANT, _GENERATE_MULTI_CHAPTERS_ASSISTANT_MESSAGE_FOR_16K.format())  # nopep8.
+    system_message_2 = build_message(Role.SYSTEM, _GENERATE_MULTI_CHAPTERS_SYSTEM_PROMPT_2_FOR_16K.format(lang=lang))  # nopep8.
+    return [system_message, user_message, assistant_message, system_message_2]
